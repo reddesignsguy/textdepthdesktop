@@ -96,7 +96,8 @@ void TextDepth::createRasterData()
    // Calculate the vanishing point using the leftmost and rightmost subpaths
    m_vanishingPoint = calculateVanishingPoint(tmp_frontSubpaths, tmp_backSubpaths);
 
-    std::vector<std::vector<Quad>> quads;
+    // std::vector<std::vector<Quad>> quads; TODO: testing
+    std::vector<Quad> quads;
     // Abstract the points into quads which is needed for when we sort them
     for (int subpathIdx = 0; subpathIdx < tmp_frontSubpaths.size(); subpathIdx ++)
     {
@@ -112,7 +113,8 @@ void TextDepth::createRasterData()
             q.back1 = backPoints[i];
             q.back2 = backPoints[i+1];
             
-            subpathQuads.push_back(q);
+            // subpathQuads.push_back(q); TODO: testing
+            quads.push_back(q);
         }
 
         // Make a quad for the first and last pair of points
@@ -126,21 +128,27 @@ void TextDepth::createRasterData()
         qDebug() << "apatriawan num quads: " <<  subpathQuads.size() << " for subpathIdx: " << subpathIdx;
 
 
-        quads.push_back(subpathQuads);
+        // quads.push_back(subpathQuads);
     }
 
     // Sort subpath quads by whoever is closest to the vanishing point
-    for (int subpathIdx = 0; subpathIdx < quads.size(); subpathIdx ++)
-    {
-        const auto& subpathQuads = quads[subpathIdx];
+    // for (int subpathIdx = 0; subpathIdx < quads.size(); subpathIdx ++)
+    // {
+        // const auto& subpathQuads = quads[subpathIdx];
         std::vector<std::pair<int, int>> subpathQuadsDistToVanishingPointIndices;
         int i = 0;
         // Calculate vanishing points for each quad
-        for (const auto& quad : subpathQuads)
+        for (const auto& quad : quads)
         {
-            auto pos = QLineF(quad.front1, quad.front2).center();
+            QPointF avg(0, 0);
+            avg += quad.front1;
+            avg += quad.front2;
+            avg += quad.back1;
+            avg += quad.back2;
+            avg /= 4;
+
             subpathQuadsDistToVanishingPointIndices.push_back(std::pair<int,int>{i,
-                                                        QLineF(pos, m_vanishingPoint).length()});
+                                                        QLineF(avg, m_vanishingPoint).length()});
             i++;
         }
 
@@ -156,32 +164,32 @@ void TextDepth::createRasterData()
         std::vector<Quad> sortedQuads;
         for (const auto [index, _] : subpathQuadsDistToVanishingPointIndices)
         {
-            Quad quad = subpathQuads[index];
+            Quad quad = quads[index];
             sortedQuads.push_back(quad);
         }
 
-        quads[subpathIdx] = sortedQuads;
-    }
+        quads = sortedQuads;
+    // }
 
-    std::vector<std::vector<Quad>> sortedQuads;
+    // std::vector<std::vector<Quad>> sortedQuads;
 
     // Make the letters on the side the first to be rendered
-    int left = 0;
-    int right = quads.size() - 1;
-    while (left <= right)
-    {
-        if (left == right)
-        {
-            sortedQuads.push_back(quads[left]);
-            break;
-        }
+    // int left = 0;
+    // int right = quads.size() - 1;
+    // while (left <= right)
+    // {
+    //     if (left == right)
+    //     {
+    //         sortedQuads.push_back(quads[left]);
+    //         break;
+    //     }
 
-        sortedQuads.push_back(quads[left]);
-        sortedQuads.push_back(quads[right]);
-        left ++;
-        right --;
-    }
-    quads = sortedQuads;
+    //     sortedQuads.push_back(quads[left]);
+    //     sortedQuads.push_back(quads[right]);
+    //     left ++;
+    //     right --;
+    // }
+    // quads = sortedQuads;
 
     
     // Debug output
@@ -201,16 +209,17 @@ void TextDepth::createRasterData()
     int totalQuads = 0;
     
     // Process each subpath (letter) separately
-    for (int subpathIdx = 0; subpathIdx < quads.size(); ++subpathIdx) {
-        const auto subpathQuad = quads[subpathIdx];
+    // for (int subpathIdx = 0; subpathIdx < quads.size(); ++subpathIdx) {
+        // const auto subpathQuad = quads[subpathIdx];
         
-        qDebug() << "Processing subpath" << subpathIdx 
-                 << "- Points:" << subpathQuad.size() ;
+        // qDebug() << "Processing subpath" << subpathIdx
+        //          << "- Points:" << subpathQuad.size() ;
         
         // For quad, render it
-        for (int i = 0; i < subpathQuad.size() + 1; i++) {
+        for (int i = 0; i < quads.size(); i++) {
+            // i = i % subpathQuad.size();
             // Get two consecutive points from front polygon
-            const auto quad = subpathQuad[i];
+            const auto quad = quads[i];
 
             const QPointF& frontP1 = quad.front1;
             const QPointF& frontP2 = quad.front2;
@@ -227,7 +236,7 @@ void TextDepth::createRasterData()
         }
         
         // qDebug() << "  Created" << (minPoints - 1) << "quads for subpath" << subpathIdx;
-    }
+    // }
 
     // for (int subpathIdx = 0; subpathIdx < frontSubpaths.size(); ++subpathIdx) {
     //     const auto frontPolygon = frontSubpaths[subpathIdx];
@@ -303,7 +312,7 @@ std::vector<std::vector<QPointF>> TextDepth::extractPathPoints(const QPainterPat
     
     QPointF currentPoint;
     QPointF p0, p1, p2, p3;
-    
+
     std::vector<QPointF> subpath;
     for (int i = 0; i < path.elementCount(); ++i) {
         QPainterPath::Element element = path.elementAt(i);
@@ -357,8 +366,10 @@ std::vector<std::vector<QPointF>> TextDepth::extractPathPoints(const QPainterPat
             res.push_back(subpath);
             subpath.clear();
         }
+
+
     }
-    
+
     return res;
 }
 
