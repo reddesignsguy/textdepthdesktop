@@ -1,0 +1,2 @@
+set(__QT_DEPLOY_TARGET_appTextDepthOG_FILE /Users/albanypatriawan/TextDepthOG/build/Qt_6_9_3_for_macOS-Debug/appTextDepthOG.app/Contents/MacOS/appTextDepthOG)
+set(__QT_DEPLOY_TARGET_appTextDepthOG_TYPE EXECUTABLE)

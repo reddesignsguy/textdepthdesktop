@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/qt/qml/TextDepthOG/">
+    <file alias="Main.qml">/Users/albanypatriawan/TextDepthOG/Main.qml</file>
+  </qresource>
+</RCC>
+

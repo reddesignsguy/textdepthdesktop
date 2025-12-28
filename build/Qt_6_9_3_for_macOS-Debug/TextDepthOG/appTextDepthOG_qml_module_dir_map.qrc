@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="/qt/qml/TextDepthOG">/Users/albanypatriawan/TextDepthOG/build/Qt_6_9_3_for_macOS-Debug/TextDepthOG</file>
+
+  </qresource>
+</RCC>

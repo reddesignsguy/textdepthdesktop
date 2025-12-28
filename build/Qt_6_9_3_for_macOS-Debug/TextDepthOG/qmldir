@@ -1,0 +1,6 @@
+module TextDepthOG
+typeinfo appTextDepthOG.qmltypes
+prefer :/qt/qml/TextDepthOG/
+Main 1.0 Main.qml
+depends QtQuick
+
