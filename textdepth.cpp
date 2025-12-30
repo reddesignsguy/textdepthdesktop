@@ -91,8 +91,8 @@ void TextDepth::createRasterData()
     // This prevents conjoining planes between different letters
     // QList<QPolygonF> frontSubpaths = m_textPath.toSubpathPolygons();
     // QList<QPolygonF> backSubpaths = smallerTextPath.toSubpathPolygons();
-    auto tmp_frontSubpaths = extractPathPoints(m_textPath, 10);
-    auto tmp_backSubpaths = extractPathPoints(smallerTextPath, 10);
+    auto tmp_frontSubpaths = extractPathPoints(m_textPath, 25);
+    auto tmp_backSubpaths = extractPathPoints(smallerTextPath, 25);
    // Calculate the vanishing point using the leftmost and rightmost subpaths
    m_vanishingPoint = calculateVanishingPoint(tmp_frontSubpaths, tmp_backSubpaths);
 
@@ -204,7 +204,7 @@ void TextDepth::createRasterData()
     }
     
     // Color for the depth/side surfaces - match back text color, fully opaque
-    QColor depthColor(40, 96, 160, 255); // Same as back text, fully opaque
+    // QColor depthColor(40, 96, 160, 255); // Same as back text, fully opaque
     
     int totalQuads = 0;
     
@@ -457,8 +457,10 @@ QColor TextDepth::calculateColorFromAngle(const QPointF& p1, const QPointF& p2)
     // Define color range (darker to lighter blue)
     // Darker blue for horizontal: RGB(20, 48, 80)
     // Lighter blue for vertical: RGB(60, 144, 240)
+
     int minR = 20, minG = 48, minB = 80;
-    int maxR = 60, maxG = 144, maxB = 240;
+    int maxR = 30, maxG = 72, maxB = 120;
+    // 40, 96, 160, 255
     
     // Interpolate based on horizontalness
     int r = static_cast<int>(minR + (maxR - minR) * (1.0 - horizontalness));
