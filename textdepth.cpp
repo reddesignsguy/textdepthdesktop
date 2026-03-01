@@ -7,15 +7,18 @@
 
 TextDepth::TextDepth(QQuickItem *parent)
     : QQuickPaintedItem(parent)
-    , m_text("TextDepth")
+    , m_text("T")
 {
     // Set default size
-    setWidth(400);
-    setHeight(300);
+    setWidth(1080);
+    setHeight(1080);
     
     // Create initial text path and raster data
     updateTextPath();
     createRasterData();
+
+    setAcceptedMouseButtons(Qt::AllButtons);
+    setAcceptHoverEvents(true); // optional but useful
 }
 
 void TextDepth::setText(const QString &text)
@@ -38,20 +41,264 @@ void TextDepth::updateTextPath()
     }
     
     QFont font;
-    font.setPixelSize(80);
+    font.setPixelSize(m_textSize);
     font.setBold(true);
     
     // Calculate text position to center it
     QFontMetrics metrics(font);
     QRect textRect = metrics.boundingRect(m_text);
     
-    qreal x = (width() - textRect.width()) / 2.0 - textRect.x();
-    qreal y = (height() + textRect.height()) / 2.0 - textRect.y();
-    
-    m_textPath.addText(x, y, font, m_text);
-    
+    m_textX = (width() - textRect.width()) / 2.0 - textRect.x();
+    m_textY = (height() + textRect.height()) / 2.0;
+
+    qDebug() << "height: " << height() ;
+    qDebug() << "text rect height: " << height() ;
+    qDebug() << "text rect height: " << height() ;
+    qDebug() << "text y: " << m_textY ;
+    m_textPath.addText(m_textX, m_textY, font, m_text);
+
     // Set fill rule to WindingFill to properly fill holes in letters like 'e', 'o', 'a'
     m_textPath.setFillRule(Qt::WindingFill);
+}
+
+// Merge a new interval into a list of existing intervals
+std::vector<TextDepth::Interval> TextDepth::insertInterval(std::vector<Interval> intervals, Interval newInterval)
+{
+    intervals.push_back(newInterval);
+    std::sort(intervals.begin(), intervals.end(), [](const Interval& a, const Interval& b) {
+        return a.start < b.start;
+    });
+
+    std::vector<Interval> merged;
+    merged.push_back(intervals[0]);
+    for (const auto& interval : intervals)
+    {
+        // If the current interval's start overlaps with the last interval in our merged intervals,
+        // then we can "extend" the last interval by setting its end to be the current interval's end
+        if (interval.start <= merged.back().end)
+        {
+            merged.back().end = std::max(merged.back().end, interval.end);
+        }
+        // Otherwise, the current interval is completely disjoint from the last interval and thus
+        // we can just append it to to our merged intervals
+        else
+        {
+            merged.push_back(interval);
+        }
+    }
+    intervals = merged;
+    return intervals;
+}
+
+// Find intersection of a horizontal scanline y = scanY with a line segment
+bool TextDepth::intersectScanline(double scanY, const QPointF& p1, const QPointF& p2, double& outX)
+{
+    if ((p1.y() <= scanY && p2.y() >= scanY) || (p2.y() <= scanY && p1.y() >= scanY))
+    {
+        if (p1.y() == p2.y())
+        {
+            // Horizontal edge: choose leftmost point
+            outX = std::min(p1.x(), p2.x());
+        }
+        else
+        {
+            double t = (scanY - p1.y()) / (p2.y() - p1.y());
+            outX = p1.x() + t * (p2.x() - p1.x());
+        }
+        return true;
+    }
+    return false;
+}
+
+void TextDepth::printIntervalsState(std::unordered_map<int, std::vector<TextDepth::Interval>> intervalState)
+{
+    qDebug("---------------- Interval state ----------------");
+    for (auto& [yIndex, intervals] : intervalState)
+    {
+        qDebug() << "yIndex: "<< yIndex;
+        for (auto& interval: intervals)
+        {
+            qDebug() << "  start: " << interval.start;
+            qDebug() << "  end: " << interval.end;
+        }
+    }
+
+    qDebug("---------------- ----------------- ----------------");
+}
+
+// Optimized scanline algorithm: only use y-values where edges exist
+std::vector<TextDepth::Quad> TextDepth::getVisibleQuadsOptimized(const std::vector<Quad>& quads, const std::shared_ptr<IPolygon> frontPolygon)
+{
+    if (quads.empty())
+        return {};
+
+
+    // Step 0.1: Map of scanline y-value to accumulated intervals
+    std::unordered_map<int, std::vector<Interval>> accumulatedIntervals;
+    std::vector<Quad> visibleQuads;
+
+    int minY = INT_MAX;
+    int maxY = INT_MIN;
+    for ( const auto& point: frontPolygon->getPoints())
+    {
+        minY = std::min((int) point.y(), minY);
+        maxY = std::max((int) point.y(), maxY);
+    }
+
+    for ( const auto& quad: quads)
+    {
+        for (const auto& point : quad.getPoints())
+        {
+            minY = std::min((int) point.y(), minY);
+            maxY = std::max((int) point.y(), maxY);
+        }
+    }
+
+    int numScanlines = 2;
+
+    // Step 0.2: Add scanline intervals of the front polygon
+    accumulatedIntervals = getScanlineIntervals(frontPolygon, minY, maxY, numScanlines);
+    printIntervalsState(accumulatedIntervals);
+    qDebug() << "Accumulated intervals has been populated by intervals of the front polygon";
+    // Step 1: Iterate quads from front to back
+    for (int quadIndex = quads.size() - 1; quadIndex >= 0; quadIndex--)
+    {
+        const auto& quad = quads[quadIndex];
+        const auto quadPtr = std::make_shared<Quad>(quad);
+        bool exposed = false;
+
+        auto polygonIntervals = getScanlineIntervals(quadPtr, minY, maxY, numScanlines);
+
+        // For every y-value
+        //    For every intersection
+        //         If the intersection is NOT fully engulfed by at least one of the accmulated intervals at this y-value
+        //				Then this polygon is exposed
+        // 				Also, We can update the accumulated intervals at this y-value
+
+        for (auto& [yIndex, intervals] : polygonIntervals)
+        {
+            auto& accumulated = accumulatedIntervals[yIndex];
+
+            //    For every intersection
+            //         If the intersection is NOT fully engulfed by at least one of the accmulated intervals at this y-value
+            //				Then this polygon is exposed
+            // 				Also, We can update the accumulated intervals at this y-value
+            for (auto& interval : intervals)
+            {
+
+                qDebug() << "start: " << interval.start << ", end: " << interval.end;
+                bool engulfed = false;
+                for (const auto& acc : accumulated)
+                {
+                    if (interval.start >= acc.start && interval.end <= acc.end)
+                    {
+                        printIntervalsState(accumulatedIntervals);
+                        engulfed = true;
+                        break;
+                    }
+                }
+
+                // This means that this interval is visible to the viewer..
+                // and thus this quad should be marked as visible for rendering.
+                // We should also merge this interval in as it expands the coverage of our accumulated intervals
+                // Future intervals will now consider this interval and see if they are occluded by this interval
+                if (!engulfed)
+                {
+                    exposed = true;
+
+                    printIntervalsState(accumulatedIntervals);
+                    // DOUBLE CHECK ME
+                    // Do I need to sort before merge interval?
+                    accumulatedIntervals[yIndex] = insertInterval(accumulated, interval);
+                    printIntervalsState(accumulatedIntervals);
+                }
+            }
+        }
+
+        if (exposed)
+        {
+            qDebug() << "quad is exposed!";
+            visibleQuads.push_back(quad);
+        }
+        else
+        {
+            qDebug() <<  "Hiding quad! " << quadIndex;
+        }
+    }
+
+    return visibleQuads;
+}
+
+std::unordered_map<int, std::vector<TextDepth::Interval>> TextDepth::getScanlineIntervals(std::shared_ptr<IPolygon> polygon, int minY, int maxY, int numScanlines){
+    qDebug() << "Getting scanline intervals:";
+        std::unordered_map<int, std::vector<TextDepth::Interval>> scanlineIntervals;
+
+        // TODO: Put this further upstream? User may want to inject their own value
+        // I.  get min and max Y of this quad then use that to find scan lines
+        int increment = (maxY - minY) / numScanlines;
+
+        // II. iterate thru scanlines
+        int exposeCount = 0;
+        for (int scanY = minY; scanY < maxY ; scanY+= increment)
+        {
+            qDebug() << "   scan Y: " << scanY;
+            std::vector<double> intersections;
+
+            // Step 1a.i: Find intersections with edges
+            for (const auto& edge : polygon->getEdges())
+            {
+                double x;
+                // TODO: Verify intersection algorithm
+                if (intersectScanline(scanY, edge.first, edge.second, x))
+                {
+                    intersections.push_back(x);
+                }
+            }
+
+            if (intersections.empty())
+            {
+                qDebug() << "      NO intersection for scanline";
+                continue;
+            }
+
+            // TODO: If intersections size is 1, then.. this breaks!
+            // Would this even count as exposed? hm.. let's ignore for now.
+            if (intersections.size() == 1)
+            {
+                qDebug() << "       found only one intersection for scanline: " << scanY;
+                continue;
+            }
+
+            bool numIntersectionsIsOdd = intersections.size() % 2 == 1;
+            if (numIntersectionsIsOdd)
+            {
+                qDebug() << "      intersection size is ODD for y = " << scanY << " with intersetion count = " << intersections.size();
+                continue;
+            }
+
+
+            std::sort(intersections.begin(), intersections.end());
+
+            qDebug() << "        intersections size: " << intersections.size() ;
+            for (int i = 0; i + 1 < intersections.size(); i += 2)
+            {
+                // DEBUG: If i + 1 >= intersections.size(), we will be out of bounds...
+                // This shouldn't happen because we do a "continue" above if the intersection size is ODD..
+                // But this is a fallback
+                {
+                    qDebug() << "       intersection index: " << i;
+                    if (i + 1 >= intersections.size())
+                    {
+
+                        qDebug() << "     WARNING: intersection index: " << i << " will be out of bounds!";
+                    }
+                }
+
+                Interval interval{ intersections[i], intersections[i + 1] };
+                scanlineIntervals[scanY].push_back(interval);
+            }
+        }
+        return scanlineIntervals;
 }
 
 void TextDepth::createRasterData()
@@ -74,7 +321,7 @@ void TextDepth::createRasterData()
     
     // Create the smaller back text path (same as in paint())
     QFont smallerFont;
-    smallerFont.setPixelSize(64); // 80% of 80
+    smallerFont.setPixelSize(m_textSize * 0.8); // 80% of 80
     smallerFont.setBold(true);
     
     QFontMetrics smallerMetrics(smallerFont);
@@ -95,16 +342,15 @@ void TextDepth::createRasterData()
     auto tmp_backSubpaths = extractPathPoints(smallerTextPath, 25);
    // Calculate the vanishing point using the leftmost and rightmost subpaths
    m_vanishingPoint = calculateVanishingPoint(tmp_frontSubpaths, tmp_backSubpaths);
-
-    // std::vector<std::vector<Quad>> quads; TODO: testing
-    std::vector<Quad> quads;
+    std::vector<std::vector<Quad>> letterToQuads;
+    //std::vector<Quad> quads;
     // Abstract the points into quads which is needed for when we sort them
     for (int subpathIdx = 0; subpathIdx < tmp_frontSubpaths.size(); subpathIdx ++)
     {
         std::vector<QPointF>& frontPoints = tmp_frontSubpaths[subpathIdx];
         std::vector<QPointF>& backPoints = tmp_backSubpaths[subpathIdx];
 
-        std::vector<Quad> subpathQuads;
+        std::vector<Quad> quadsForThisLetter;
         for (int i = 0; i < frontPoints.size() - 1; i ++)
         {
             Quad q;
@@ -112,32 +358,47 @@ void TextDepth::createRasterData()
             q.front2 = frontPoints[i + 1];
             q.back1 = backPoints[i];
             q.back2 = backPoints[i+1];
-            
             // subpathQuads.push_back(q); TODO: testing
-            quads.push_back(q);
+            quadsForThisLetter.push_back(q);
         }
 
-        // Make a quad for the first and last pair of points
-        // Quad q;
-        // q.front1 = frontPoints[0];
-        // q.front2 = frontPoints[frontPoints.size() - 1];
-        // q.back1 = backPoints[0];
-        // q.back2 = backPoints[backPoints.size() - 1];
-        // subpathQuads.push_back(q);
+        qDebug() << "apatriawan num quads: " << quadsForThisLetter.size() << " for subpathIdx: " << subpathIdx;
 
-        qDebug() << "apatriawan num quads: " <<  subpathQuads.size() << " for subpathIdx: " << subpathIdx;
-
-
-        // quads.push_back(subpathQuads);
+        letterToQuads.push_back(quadsForThisLetter);
     }
 
-    // Sort subpath quads by whoever is closest to the vanishing point
-    // for (int subpathIdx = 0; subpathIdx < quads.size(); subpathIdx ++)
-    // {
-        // const auto& subpathQuads = quads[subpathIdx];
+    // Get all the quads and group each of them with other quads belonging to the same letter
+    // Sort the quads within each letter
+    // Go thru each letter
+    //     0. Determine the min and max Y value which will be the range the scanlines will check for.
+    //        Also, determine the # of scanlines to use.
+    //     0.1. Initialize a std::unordered_map<int, std::vector<int>> scanlineToListOfAccumulatedIntersections
+    //          listOfIntersections is a std::vector<int>
+    //     0.2. Initialize a list of quads which represent the final list of quads to be drawn (it will always be a subset of the current
+    //           list of quads)
+    //     1. Iterate through every quad from front to back (edge case: add in the polygon of the front letter too as it will have a say
+    //        in what is concealed or not... that said, technically we're not just dealing with quadilaterals right??)
+    //          - Initialize variable "exposed", which is false by default. If any part of the letter is exposed, this will be set to true.
+    //            If this letter is exposed, this means we will draw it (and not remove it).
+    //          a. For every scan line
+    //                  - Initialize a list of intersections
+    //					i. Go through every edge in the quad and find the intersections of the scanline; append to list of intersections
+    //                     The # of intersections should be even in theory right??
+    //                  ii. For every 2 intersections which form an interval, see if this interval is completely overlapped by any of the "accumulated"
+    //                      intervals for this scan line.
+    //                            A) If any of the intervals ARENT completely overlapped by the accumulated interval, that means this part of the letter
+    //                               is EXPOSED (not concealed). Set "exposed" to true for this letter.
+    //                               Also, expand the accumulated interval based on this current interval. (Use merge intervals)
+    //								 Now intervals for future quads will know if the interval for this quad conceals them or not
+    //          b. If exposed is true, then add this quad to the final list of quads to be drawn
+    //
+    for (int index = 0; index < letterToQuads.size(); index ++)
+    {
         std::vector<std::pair<int, int>> subpathQuadsDistToVanishingPointIndices;
         int i = 0;
-        // Calculate vanishing points for each quad
+
+        // Calculate dist to vanishing points for each quad
+        auto& quads = letterToQuads[index];
         for (const auto& quad : quads)
         {
             QPointF avg(0, 0);
@@ -169,118 +430,44 @@ void TextDepth::createRasterData()
         }
 
         quads = sortedQuads;
-    // }
-
-    // std::vector<std::vector<Quad>> sortedQuads;
-
-    // Make the letters on the side the first to be rendered
-    // int left = 0;
-    // int right = quads.size() - 1;
-    // while (left <= right)
-    // {
-    //     if (left == right)
-    //     {
-    //         sortedQuads.push_back(quads[left]);
-    //         break;
-    //     }
-
-    //     sortedQuads.push_back(quads[left]);
-    //     sortedQuads.push_back(quads[right]);
-    //     left ++;
-    //     right --;
-    // }
-    // quads = sortedQuads;
-
-    
-    // Debug output
-    // qDebug() << "=== 3D Depth Effect (Using Subpath Polygons) ===";
-    // qDebug() << "Front subpaths:" << frontSubpaths.size();
-    // qDebug() << "Back subpaths:" << backSubpaths.size();
-    
-    // Ensure we have matching subpaths
-    if (tmp_frontSubpaths.size() != tmp_backSubpaths.size()) {
-        qDebug() << "Warning: Mismatch in subpath counts!";
-        return;
     }
-    
-    // Color for the depth/side surfaces - match back text color, fully opaque
-    // QColor depthColor(40, 96, 160, 255); // Same as back text, fully opaque
-    
-    int totalQuads = 0;
-    
-    // Process each subpath (letter) separately
-    // for (int subpathIdx = 0; subpathIdx < quads.size(); ++subpathIdx) {
-        // const auto subpathQuad = quads[subpathIdx];
-        
-        // qDebug() << "Processing subpath" << subpathIdx
-        //          << "- Points:" << subpathQuad.size() ;
-        
-        // For quad, render it
-        for (int i = 0; i < quads.size(); i++) {
-            // i = i % subpathQuad.size();
-            // Get two consecutive points from front polygon
-            const auto quad = quads[i];
 
-            const QPointF& frontP1 = quad.front1;
-            const QPointF& frontP2 = quad.front2;
-            QColor depthColor = calculateColorFromAngle(frontP1, frontP2);
-            
-            // Get corresponding points from back polygon
-            const QPointF& backP1 = quad.back1;
-            const QPointF& backP2 = quad.back2;
-            
-            // Create quadrilateral: front[i] -> front[i+1] -> back[i+1] -> back[i]
-            // This forms the "side" surface connecting the two text planes
-            fillQuadInRaster(frontP1, frontP2, backP2, backP1, depthColor);
-            totalQuads++;
+    for (int i = 0; i < letterToQuads.size(); i ++)
+    {
+        // This polygon is the one for the front text which is always at the front
+        std::shared_ptr<Polygon> frontPolygon = std::make_shared<Polygon>();
+        frontPolygon->points = tmp_frontSubpaths[i];
+
+    qDebug() << "abany";
+        letterToQuads[i] = getVisibleQuadsOptimized(letterToQuads[i], frontPolygon);
+    }
+    // Remove concealed quads ------------------------------------------
+    // do scanlines from the top most point to the bottom X amount of times
+    // (we define X -- the amount of scanlines between the top and bottom)
+
+
+    // Draw letters from the sides towards the center!
+    int left = 0;
+    int right = letterToQuads.size() - 1;
+    while (left <= right)
+    {
+        qDebug() << "renderLeft";
+        const auto& leftQuads = letterToQuads[left];
+        renderQuads(leftQuads);
+        if (left == right)
+        {
+            break;
         }
-        
-        // qDebug() << "  Created" << (minPoints - 1) << "quads for subpath" << subpathIdx;
-    // }
 
-    // for (int subpathIdx = 0; subpathIdx < frontSubpaths.size(); ++subpathIdx) {
-    //     const auto frontPolygon = frontSubpaths[subpathIdx];
-    //     const auto backPolygon = backSubpaths[subpathIdx];
-        
-    //     qDebug() << "Processing subpath" << subpathIdx 
-    //              << "- Front points:" << frontPolygon.size() 
-    //              << "Back points:" << backPolygon.size();
-        
-    //     // Ensure both polygons have the same number of points
-    //     int minPoints = qMin(frontPolygon.size(), backPolygon.size());
+        qDebug() << "renderRight";
 
-    //     if (frontPolygon.size() != backPolygon.size())
-    //     {
-    //         qDebug() << " Polygon does not have the same number of poiters";
-    //         continue;    
-    //     }
-        
-    //     if (minPoints < 2) {
-    //         qDebug() << "  Skipping subpath" << subpathIdx << "- not enough points";
-    //         continue;
-    //     }
-        
-    //     // For each consecutive pair of points in this subpath, create a quadrilateral
-    //     for (int i = 0; i + 1 < minPoints; ++i) {
-    //         // Get two consecutive points from front polygon
-    //         const QPointF& frontP1 = frontPolygon[i];
-    //         const QPointF& frontP2 = frontPolygon[i + 1];
-    //         QColor depthColor = calculateColorFromAngle(frontP1, frontP2);
-            
-    //         // Get corresponding points from back polygon
-    //         const QPointF& backP1 = backPolygon[i];
-    //         const QPointF& backP2 = backPolygon[i + 1];
-            
-    //         // Create quadrilateral: front[i] -> front[i+1] -> back[i+1] -> back[i]
-    //         // This forms the "side" surface connecting the two text planes
-    //         fillQuadInRaster(frontP1, frontP2, backP2, backP1, depthColor);
-    //         totalQuads++;
-    //     }
-        
-    //     qDebug() << "  Created" << (minPoints - 1) << "quads for subpath" << subpathIdx;
-    // }
-    
-    qDebug() << "Total quads created:" << totalQuads;
+        qDebug() << "right = " << right;
+        const auto& rightQuads = letterToQuads[right];
+        renderQuads(rightQuads);
+
+        left ++;
+        right --;
+    }
 }
 
 QPointF TextDepth::deCasteljau(const QPointF& p0, const QPointF& p1, const QPointF& p2, const QPointF& p3, qreal t)
@@ -373,7 +560,7 @@ std::vector<std::vector<QPointF>> TextDepth::extractPathPoints(const QPainterPat
     return res;
 }
 
-void TextDepth::fillPolygonScanline(const std::vector<QPointF>& points, const QColor& color)
+void TextDepth::fillPolygonScanline(const std::vector<QPointF>& points, QColor& color)
 {
     if (points.size() < 3 || m_rasterImage.isNull()) {
         return;
@@ -391,7 +578,8 @@ void TextDepth::fillPolygonScanline(const std::vector<QPointF>& points, const QC
     int startY = qMax(0, static_cast<int>(qFloor(minY)));
     int endY = qMin(m_rasterImage.height() - 1, static_cast<int>(qCeil(maxY)));
     
-    // For each scanline
+    // std::unordered_map<qreal, std::vector<qreal>> pixelsYtoX;
+    // For each scanline, find the pixel coords to fill in
     for (int y = startY; y <= endY; ++y) {
         std::vector<qreal> intersections;
         
@@ -416,21 +604,172 @@ void TextDepth::fillPolygonScanline(const std::vector<QPointF>& points, const QC
         
         // Fill between pairs of intersections
         for (size_t i = 0; i + 1 < intersections.size(); i += 2) {
-            int startX = qMax(0, static_cast<int>(qCeil(intersections[i])));
+            int startX = qMax(0, static_cast<int>(qFloor(intersections[i])));
             int endX = qMin(m_rasterImage.width() - 1, static_cast<int>(qFloor(intersections[i + 1])));
             
             for (int x = startX; x <= endX; ++x) {
+
+                qreal alpha = 255;
+                // if (x == startX /*|| x == startX + 1*/) {
+                //     qreal distToIntersection = qAbs(intersections[i] - x);
+                //     qreal coverage = 0.5 - distToIntersection;
+                //     coverage = qBound(0.0, coverage, 1.0);
+                //     alpha = coverage * 255.0 + 0.5;
+                // } else if (x == endX /*|| x == endX - 1*/) {
+                //     qreal distToIntersection = qAbs(intersections[i+1] - x);
+                //     qreal coverage = 0.5 - distToIntersection;
+                //     coverage = qBound(0.0, coverage, 1.0);
+                //     alpha = coverage * 255.0 + 0.5;
+                // }
+
+                // color.setAlpha(alpha);
                 m_rasterImage.setPixel(x, y, color.rgba());
+                // pixelsYtoX[y].push_back(x);
             }
         }
     }
+
+    // For each pixel, fill it in
+    // for (const auto& [y, xCoords] : pixelsYtoX)
+    // {
+    //     m_rasterImage.setPixel(x, y, color.rgba());
+    // }
+
 }
 
-void TextDepth::fillQuadInRaster(const QPointF& p0, const QPointF& p1, const QPointF& p2, const QPointF& p3, const QColor& color)
+QPointF TextDepth::closestPointOnLineSegment(
+    const QPointF& segmentStart,
+    const QPointF& segmentEnd,
+    const QPointF& queryPoint)
 {
+    QPointF segmentDirection = segmentEnd - segmentStart;
+    QPointF startToQuery     = queryPoint - segmentStart;
+
+    double segmentLengthSquared =
+        segmentDirection.x() * segmentDirection.x() +
+        segmentDirection.y() * segmentDirection.y();
+
+    // Degenerate segment (start == end)
+    if (segmentLengthSquared == 0.0)
+        return segmentStart;
+
+    double projectionFactor =
+        (startToQuery.x() * segmentDirection.x() +
+         startToQuery.y() * segmentDirection.y()) /
+        segmentLengthSquared;
+
+    projectionFactor = qBound(0.0, projectionFactor, 1.0);
+
+    return segmentStart + segmentDirection * projectionFactor;
+}
+
+const void TextDepth::fillQuadInRaster(Quad& quad, QColor& color)
+{
+      //  qDebug("fill quad in raster!");
+    const auto& points = quad.getPoints();
+
+    // Find bounding box
+    qreal minY = points[0].y();
+    qreal maxY = points[0].y();
+     //   qDebug("getting mins and maxes!");
+
+    for (const QPointF& p : points) {
+        minY = qMin(minY, p.y());
+        maxY = qMax(maxY, p.y());
+    }
+
+    //qDebug("setting start Y and end Y");
+    int startY = qMax(0, static_cast<int>(qFloor(minY)));
+    int endY = qMin(m_rasterImage.height() - 1, static_cast<int>(qCeil(maxY)));
+
+    //qDebug("loopin");
+    // For each scanline, find the pixel coords to fill in
+    // This loop scales in time complexity based on the text height
+    for (int y = startY; y <= endY; ++y) {
+
+//        qDebug("getting intersdctions!");
+        std::vector<qreal> intersections;
+
+        for (auto edge : quad.getEdges())
+        {
+            const QPointF& p1 = edge.first;
+            const QPointF& p2 = edge.second;
+
+            if ((p1.y() <= y && p2.y() > y) || (p2.y() <= y && p1.y() > y)) {
+                // Calculate x intersection
+                qreal t = (y - p1.y()) / (p2.y() - p1.y());
+                qreal x = p1.x() + t * (p2.x() - p1.x());
+                intersections.push_back(x);
+            }
+        }
+
+        // Sort intersections
+        std::sort(intersections.begin(), intersections.end());
+//        qDebug("made it!");
+//        qDebug() << "# intersections : " << intersections.size();
+        // Fill between pairs of intersections
+        for (int i = 0; i + 1 < intersections.size(); i += 2) {
+//            qDebug() << "i = " << i;
+//            qDebug() << "intersections.size() - 1" << intersections.size() - 1;
+//            qDebug() << "i < intersection count?? " << (i < intersections.size() - 1);
+//            qDebug() << "filling intersections";
+            double intersect1 = intersections[i];
+            double intersect2 = intersections[i+1];
+            int startX = qMax(0, static_cast<int>(qFloor(intersect1)));
+            int endX = qMin(m_rasterImage.width() - 1, static_cast<int>(qFloor(intersect2)));
+
+            for (int x = startX; x <= endX; ++x) {
+                // if (x == startX /*|| x == startX + 1*/) {
+                //     qreal distToIntersection = qAbs(intersections[i] - x);
+                //     qreal coverage = 0.5 - distToIntersection;
+                //     coverage = qBound(0.0, coverage, 1.0);
+                //     alpha = coverage * 255.0 + 0.5;
+                // } else if (x == endX /*|| x == endX - 1*/) {
+                //     qreal distToIntersection = qAbs(intersections[i+1] - x);
+                //     qreal coverage = 0.5 - distToIntersection;
+                //     coverage = qBound(0.0, coverage, 1.0);
+                //     alpha = coverage * 255.0 + 0.5;
+                // }
+                QColor under = m_rasterImage.pixelColor(x, y);
+                QColor over  = color;
+
+                // Normalize
+                float aA = over.alphaF();
+                float aB = under.alphaF();
+
+                float outA = aA + aB * (1.0f - aA);
+
+                if (outA <= 0.0f) {
+                    m_rasterImage.setPixelColor(x, y, QColor(0, 0, 0, 0));
+                    continue;
+                }
+
+                float r =
+                    (over.redF()   * aA +
+                     under.redF()  * aB * (1.0f - aA)) / outA;
+
+                float g =
+                    (over.greenF() * aA +
+                     under.greenF()* aB * (1.0f - aA)) / outA;
+
+                float b =
+                    (over.blueF()  * aA +
+                     under.blueF() * aB * (1.0f - aA)) / outA;
+
+                QColor out;
+                out.setRgbF(r, g, b, outA);
+
+                m_rasterImage.setPixelColor(x, y, out);
+                // pixelsYtoX[y].push_back(x);
+            }
+        }
+
+
+      //  qDebug() << "done with this Y";
+    }
     // Create a quadrilateral from 4 points and fill it
-    std::vector<QPointF> quad = {p0, p1, p2, p3};
-    fillPolygonScanline(quad, color);
+   // std::vector<QPointF> quad = {p0, p1, p2, p3};
+   // fillPolygonScanline(quad, color);
 }
 
 QColor TextDepth::calculateColorFromAngle(const QPointF& p1, const QPointF& p2)
@@ -498,7 +837,7 @@ QPointF TextDepth::lineIntersection(const QPointF& p1, const QPointF& p2, const 
     return QPointF(intersectX, intersectY);
 }
 
-QPointF TextDepth::calculateVanishingPoint(const std::vector<std::vector<QPointF>>& frontSubpaths, 
+QPointF TextDepth::calculateVanishingPoint(const std::vector<std::vector<QPointF>>& frontSubpaths,
                                             const std::vector<std::vector<QPointF>>& backSubpaths)
 {
     if (frontSubpaths.empty() || backSubpaths.empty()) {
@@ -513,25 +852,14 @@ QPointF TextDepth::calculateVanishingPoint(const std::vector<std::vector<QPointF
     
     // Use the first subpath that has enough points
     int subpathIdx = 0;
-    // for (size_t i = 0; i < frontSubpaths.size(); ++i) {
-    //     if (frontSubpaths[i].size() >= 2 && backSubpaths[i].size() >= 2) {
-    //         subpathIdx = i;
-    //         break;
-    //     }
-    // }
-    
-    // if (subpathIdx == -1) {
-    //     qDebug() << "No subpath with enough points found";
-    //     return QPointF(0, 0);
-    // }
     
     const auto& frontPolygon = frontSubpaths[subpathIdx];
     const auto& backPolygon = backSubpaths[subpathIdx];
     
-    qDebug() << "=== Vanishing Point Calculation ===";
-    qDebug() << "Using subpath index:" << subpathIdx;
-    qDebug() << "Front points:" << frontPolygon.size();
-    qDebug() << "Back points:" << backPolygon.size();
+   // qDebug() << "=== Vanishing Point Calculation ===";
+   // qDebug() << "Using subpath index:" << subpathIdx;
+   // qDebug() << "Front points:" << frontPolygon.size();
+   // qDebug() << "Back points:" << backPolygon.size();
     
     // Take two different points from the same subpath
     // Use first point and a point roughly in the middle
@@ -609,17 +937,12 @@ QPointF TextDepth::calculateVanishingPoint(const std::vector<std::vector<QPointF
 
     return QPointF(0,0);
 
-    
-    // Calculate the intersection of the two perspective lines
-    // Line 1: from frontP1 to backP1
-    // Line 2: from frontP2 to backP2
-    // QPointF vanishingPoint = lineIntersection(frontP1, backP1, frontP2, backP2);
-
 }
 
 void TextDepth::paint(QPainter *painter)
 {
-    qDebug() << "changin!" ;
+
+   // painter->scale(m_zoom, m_zoom);
     painter->setRenderHint(QPainter::Antialiasing);
     
     // Draw background
@@ -628,26 +951,26 @@ void TextDepth::paint(QPainter *painter)
     if (m_textPath.isEmpty()) {
         return;
     }
-    
+
     // Create smaller duplicate text path (80% of original size)
     QFont smallerFont;
-    smallerFont.setPixelSize(64); // 80% of 80
+    smallerFont.setPixelSize(m_textSize * 0.8); // 80% of 80
     smallerFont.setBold(true);
     
     QFontMetrics smallerMetrics(smallerFont);
     QRect smallerTextRect = smallerMetrics.boundingRect(m_text);
     
     qreal smallerX = (width() - smallerTextRect.width()) / 2.0 - smallerTextRect.x();
-    qreal smallerY = (height() + smallerTextRect.height()) / 2.0 - smallerTextRect.y();
+    qreal smallerY = (height() + smallerTextRect.height()) / 2.0;
     
     QPainterPath smallerTextPath;
     smallerTextPath.addText(smallerX, smallerY, smallerFont, m_text);
-    smallerTextPath.setFillRule(Qt::WindingFill);
+    // smallerTextPath.setFillRule(Qt::WindingFill);
     
     // LAYER 1: Draw smaller duplicate text first (bottom layer)
     painter->setPen(Qt::NoPen);
     painter->setBrush(QColor(40, 96, 160));
-    painter->drawPath(smallerTextPath);
+    // painter->drawPath(smallerTextPath);
     
     // LAYER 2: Draw pure raster data (middle layer)
     // This demonstrates drawing raw pixel/bitmap data between the text layers
@@ -659,122 +982,34 @@ void TextDepth::paint(QPainter *painter)
         // Draw the raster image directly - this is pure pixel data
         painter->drawImage(QPointF(rasterX, rasterY), m_rasterImage);
     }
-    
+
     // LAYER 3: Draw main text on top (top layer)
-    painter->setBrush(QColor(50, 120, 200));
+    painter->setBrush(QColor(50, 120, 200, 200));
     painter->drawPath(m_textPath);
     
     // LAYER 4: Draw vanishing point as a visible dot
-    if (!m_vanishingPoint.isNull() && m_vanishingPoint.x() != 0 && m_vanishingPoint.y() != 0) {
-        // Draw a bright red dot for the vanishing point
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(255, 0, 0, 255)); // Bright red
+    // if (!m_vanishingPoint.isNull() && m_vanishingPoint.x() != 0 && m_vanishingPoint.y() != 0) {
+    //     // Draw a bright red dot for the vanishing point
+    //     painter->setPen(Qt::NoPen);
+    //     painter->setBrush(QColor(255, 0, 0, 255)); // Bright red
         
-        // Draw a circle with radius 8 pixels
-        qreal radius = 8.0;
-        painter->drawEllipse(m_vanishingPoint, radius, radius);
+    //     // Draw a circle with radius 8 pixels
+    //     qreal radius = 8.0;
+    //     painter->drawEllipse(m_vanishingPoint, radius, radius);
         
-        // Draw a white outline for better visibility
-        painter->setPen(QPen(QColor(255, 255, 255, 255), 2));
-        painter->setBrush(Qt::NoBrush);
-        painter->drawEllipse(m_vanishingPoint, radius, radius);
+    //     // Draw a white outline for better visibility
+    //     painter->setPen(QPen(QColor(255, 255, 255, 255), 2));
+    //     painter->setBrush(Qt::NoBrush);
+    //     painter->drawEllipse(m_vanishingPoint, radius, radius);
         
-        qDebug() << "Drawing vanishing point at:" << m_vanishingPoint;
-    }
+    //     qDebug() << "Drawing vanishing point at:" << m_vanishingPoint;
+    // }
 
-    painter->drawLines(QList<QLineF>{
-        QLineF(tmp1, tmp2),
-        QLineF(tmp3, tmp4)
-    });
-
+    // painter->drawLines(QList<QLineF>{
+    //     QLineF(tmp1, tmp2),
+    //     QLineF(tmp3, tmp4)
+    // });
     
     // Print all bezier points and evaluate curves using De Casteljau's algorithm
     qDebug() << "=== Front Text Bezier Points with De Casteljau Evaluation ===";
-    
-    QPointF currentPoint;
-    QPointF p0, p1, p2, p3;
-    
-    for (int i = 0; i < m_textPath.elementCount(); ++i) {
-        QPainterPath::Element element = m_textPath.elementAt(i);
-        QPointF point(element.x, element.y);
-        
-        QString elementType;
-        switch (element.type) {
-            case QPainterPath::MoveToElement:
-                elementType = "MoveTo";
-                currentPoint = point;
-                p0 = point;
-                // qDebug() << QString("Point %1: %2 (%3, %4)")
-                //             .arg(i)
-                //             .arg(elementType)
-                //             .arg(element.x, 0, 'f', 2)
-                //             .arg(element.y, 0, 'f', 2);
-                break;
-                
-            case QPainterPath::LineToElement:
-                elementType = "LineTo";
-                currentPoint = point;
-                p0 = point;
-                // qDebug() << QString("Point %1: %2 (%3, %4)")
-                //             .arg(i)
-                //             .arg(elementType)
-                //             .arg(element.x, 0, 'f', 2)
-                //             .arg(element.y, 0, 'f', 2);
-                break;
-                
-            case QPainterPath::CurveToElement:
-                elementType = "CurveTo";
-                p1 = point;
-                // qDebug() << QString("Point %1: %2 (%3, %4) - Control Point 1")
-                //             .arg(i)
-                //             .arg(elementType)
-                //             .arg(element.x, 0, 'f', 2)
-                //             .arg(element.y, 0, 'f', 2);
-                break;
-                
-            case QPainterPath::CurveToDataElement:
-                elementType = "CurveToData";
-                // Check if this is the second control point or the end point
-                if (i + 1 < m_textPath.elementCount() && 
-                    m_textPath.elementAt(i + 1).type == QPainterPath::CurveToDataElement) {
-                    // This is control point 2
-                    p2 = point;
-                    // qDebug() << QString("Point %1: %2 (%3, %4) - Control Point 2")
-                    //             .arg(i)
-                    //             .arg(elementType)
-                    //             .arg(element.x, 0, 'f', 2)
-                    //             .arg(element.y, 0, 'f', 2);
-                } else {
-                    // This is the end point - we have all 4 points for cubic Bezier
-                    p3 = point;
-                    // qDebug() << QString("Point %1: %2 (%3, %4) - End Point")
-                    //             .arg(i)
-                    //             .arg(elementType)
-                    //             .arg(element.x, 0, 'f', 2)
-                    //             .arg(element.y, 0, 'f', 2);
-                    
-                    // Apply De Casteljau's algorithm at t=0.5 (midpoint of curve)
-                    QPointF midpoint = deCasteljau(p0, p1, p2, p3, 0.5);
-                    // qDebug() << QString("  -> De Casteljau at t=0.5: (%1, %2)")
-                    //             .arg(midpoint.x(), 0, 'f', 2)
-                    //             .arg(midpoint.y(), 0, 'f', 2);
-                    
-                    // Evaluate at multiple t values
-                    // qDebug() << "  -> Curve evaluation:";
-                    for (qreal t = 0.0; t <= 1.0; t += 0.25) {
-                        QPointF evalPoint = deCasteljau(p0, p1, p2, p3, t);
-                        // qDebug() << QString("     t=%1: (%2, %3)")
-                        //             .arg(t, 0, 'f', 2)
-                        //             .arg(evalPoint.x(), 0, 'f', 2)
-                        //             .arg(evalPoint.y(), 0, 'f', 2);
-                    }
-                    
-                    // Update current point and p0 for next curve
-                    currentPoint = p3;
-                    p0 = p3;
-                }
-                break;
-        }
-    }
-    qDebug() << "=== Total Points:" << m_textPath.elementCount() << "===";
 }
