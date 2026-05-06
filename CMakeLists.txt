@@ -1,10 +1,16 @@
+
+
+set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architecture") # reddesigns: required on mac
+message(STATUS "ARCH: ${CMAKE_OSX_ARCHITECTURES}")
+message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+
 cmake_minimum_required(VERSION 3.16)
-
 project(TextDepthOG VERSION 0.1 LANGUAGES CXX)
-
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Quick)
+find_package(Qt6 REQUIRED COMPONENTS Core)
+
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -18,6 +24,8 @@ qt_add_qml_module(appTextDepthOG
     QML_FILES
         Main.qml
         SOURCES textdepth.h textdepth.cpp
+        SOURCES PhotoshopWriter.h
+        SOURCES photoshopwriter.h photoshopwriter.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -34,6 +42,10 @@ set_target_properties(appTextDepthOG PROPERTIES
 target_link_libraries(appTextDepthOG
     PRIVATE Qt6::Quick
 )
+
+add_subdirectory(PhotoshopAPI)
+target_link_libraries(appTextDepthOG PRIVATE PhotoshopAPI)
+target_link_libraries(appTextDepthOG PRIVATE Qt6::Core)
 
 include(GNUInstallDirs)
 install(TARGETS appTextDepthOG

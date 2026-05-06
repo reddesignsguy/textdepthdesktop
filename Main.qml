@@ -4,8 +4,8 @@ import QtQuick.Layouts
 import TextDepthOG
 
 Window {
-    width: 640
-    height: 580
+    width: 1920
+    height: 1080
     visible: true
     title: qsTr("TextDepth Demo")
     
@@ -33,18 +33,29 @@ Window {
                     font.pixelSize: 14
                     font.bold: true
                 }
-                
+                Button {
+                    id: tmp_Save
+                    width: 50
+                    font.pixelSize: 16
+                    text: "Save"
+
+                    onClicked: {
+                         textDepthWidget.writeToPhotoshop();
+                    }
+
+                }
                 TextField {
                     id: textInput
                     Layout.fillWidth: true
                     placeholderText: "Type your text here..."
-                    text: "TextDepth"
+                    text: "o"
                     font.pixelSize: 16
-                    
+
                     onTextChanged: {
                         textDepthWidget.text = text
                     }
                 }
+
             }
         }
         

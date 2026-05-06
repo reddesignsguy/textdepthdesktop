@@ -1,5 +1,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQMLContext>
+ #include <textdepth.h>
 
 int main(int argc, char *argv[])
 {

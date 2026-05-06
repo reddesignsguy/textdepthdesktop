@@ -8,7 +8,11 @@
 #include <QPainter>
 #include <QImage>
 #include <vector>
-#include <climits>
+#include <PhotoshopWriter.h>
+
+#include <PhotoshopAPI.h>
+#include <vector>
+#include <unordered_map>
 
 class TextDepth : public QQuickPaintedItem
 {
@@ -32,22 +36,21 @@ class TextDepth : public QQuickPaintedItem
     struct IPolygon
     {
         ~IPolygon() {};
-        virtual std::vector<QPointF> getPoints() const{qDebug() << "IMPLEMENT ME!";};
+        virtual std::vector<QPointF> getPoints() const = 0;
         virtual std::vector<std::pair<QPointF, QPointF>> getEdges() const{};
     };
 
     struct Polygon : IPolygon
     {
-        std::vector<QPointF> points;
+        std::vector<QPointF> m_points;
 
-
-        std::vector<QPointF> getPoints() const override { qDebug() << "Running an overriden getPoints() function!"; return points; };
+        std::vector<QPointF> getPoints() const override { qDebug() << "Running an overriden getPoints() function!"; return m_points; };
         std::vector<std::pair<QPointF, QPointF>> getEdges() const override
         {
             std::vector<std::pair<QPointF, QPointF>> edges;
-            for (int i = 0; i < points.size(); i ++)
+            for (int i = 0; i < m_points.size(); i ++)
             {
-                edges.push_back(std::make_pair(points[i], points[  (i + 1) % points.size()  ]));
+                edges.push_back(std::make_pair(m_points[i], m_points[  (i + 1) % m_points.size()  ]));
             }
 
             return edges;
@@ -84,11 +87,11 @@ class TextDepth : public QQuickPaintedItem
         const QPointF& segmentEnd,
         const QPointF& queryPoint);
 public:
-
     TextDepth(QQuickItem *parent = nullptr);
 
     void mousePressEvent(QMouseEvent* event)
     {
+
         QPointF localPos = event->position();        // item-local coords
         QPointF scenePos = event->scenePosition();   // scene coords
         QPointF globalPos = event->globalPosition(); // screen coords
@@ -104,6 +107,10 @@ public:
     
     QString text() const { return m_text; }
     void setText(const QString &text);
+
+    // TODO: Refactor me! Im so ugly!
+    Q_INVOKABLE void writeToPhotoshop();
+
 
 signals:
     void textChanged();

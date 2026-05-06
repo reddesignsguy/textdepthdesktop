@@ -1,0 +1,3 @@
+[submodule "PhotoshopAPI"]
+	path = PhotoshopAPI
+	url = https://github.com/reddesignsguy/PhotoshopAPI

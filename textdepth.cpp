@@ -309,6 +309,12 @@ std::unordered_map<int, std::vector<TextDepth::Interval>> TextDepth::getScanline
 
 std::vector<std::vector<QPointF>> tmp_points;
 
+void TextDepth::writeToPhotoshop()
+{
+    PhotoshopWriter writer;
+    auto frontSubpaths = extractPathPoints(m_textPath, 25);
+    writer.write("albonster_test.psd", frontSubpaths);
+}
 void TextDepth::createRasterData()
 {
     // Create a raster image matching the canvas size
@@ -447,8 +453,14 @@ QPointF TextDepth::deCasteljau(const QPointF& p0, const QPointF& p1, const QPoin
     return result;
 }
 
-std::vector<std::vector<QPointF>> TextDepth::extractPathPoints(const QPainterPath& path, int samplesPerCurve)
+// TODO: This function does 2 things.. try to reduce
+// Thing 1: Goes thru each painterpath element
+// Thing 2: The bezier curves are simplified and the output is all non-bezier points
+
+// ... => PhotoshopWriter doesn't use Thing 2 but can do Thing 1!
+std::vector<std::vector<QPointF>> TextDepth::extractPathPoints(const QPainterPath& tmpPath, int samplesPerCurve)
 {
+    QPainterPath path = tmpPath.simplified();
     std::vector<std::vector<QPointF>> res;
     qDebug() << "num path points: "  << path.elementCount();
     // QList<QPolygonF> subpaths = path.toSubpathPolygons();
