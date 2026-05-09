@@ -9,6 +9,7 @@
 #include <QImage>
 #include <vector>
 #include <PhotoshopWriter.h>
+#include <qtToPhotoshopAPI.h>
 
 #include <PhotoshopAPI.h>
 #include <vector>
@@ -80,6 +81,7 @@ class TextDepth : public QQuickPaintedItem
         }
     };
 
+
     std::vector<ScanEdge> buildEdgeTable(const Quad& quad);
 
     QPointF closestPointOnLineSegment(
@@ -87,6 +89,8 @@ class TextDepth : public QQuickPaintedItem
         const QPointF& segmentEnd,
         const QPointF& queryPoint);
 public:
+
+
     TextDepth(QQuickItem *parent = nullptr);
 
     void mousePressEvent(QMouseEvent* event)
@@ -130,7 +134,12 @@ private:
     // Helper methods for 3D depth effect
 
     void printIntervalsState(std::unordered_map<int, std::vector<TextDepth::Interval>> intervalState);
-    std::vector<std::vector<QPointF>> extractPathPoints(const QPainterPath& path, int samplesPerCurve);
+
+    // Returns an non-bezier approximation of a beizier-point-containing QPainterPath
+    std::vector<std::vector<QPointF>> getNonBezierPath(const QPainterPath& path, int samplesPerCurve);
+
+    // Returns a subpath-organized representation of a QPatherPath
+    std::vector<std::vector<QPainterPath::Element>> getOrganizedPath(const QPainterPath& inputPath);
 
 
     const void setRasterQuadData(Quad& quad, QColor& color);

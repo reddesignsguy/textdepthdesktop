@@ -312,9 +312,13 @@ std::vector<std::vector<QPointF>> tmp_points;
 void TextDepth::writeToPhotoshop()
 {
     PhotoshopWriter writer;
-    auto frontSubpaths = extractPathPoints(m_textPath, 25);
+
+
+
+    // auto frontSubpaths = flattenBezierPath(m_textPath, 25);
     writer.write("albonster_test.psd", frontSubpaths);
 }
+
 void TextDepth::createRasterData()
 {
     // Create a raster image matching the canvas size
@@ -350,9 +354,9 @@ void TextDepth::createRasterData()
     // This prevents conjoining planes between different letters
     // QList<QPolygonF> frontSubpaths = m_textPath.toSubpathPolygons();
     // QList<QPolygonF> backSubpaths = smallerTextPath.toSubpathPolygons();
-    auto tmp_frontSubpaths = extractPathPoints(m_textPath, 25);
+    auto tmp_frontSubpaths = getNonBezierPath(m_textPath, 25);
     tmp_points = tmp_frontSubpaths;
-    auto tmp_backSubpaths = extractPathPoints(smallerTextPath, 25);
+    auto tmp_backSubpaths = getNonBezierPath(smallerTextPath, 25);
     qDebug() << "tmp_frontSubpaths size: " << tmp_frontSubpaths.size();
    // Calculate the vanishing point using the leftmost and rightmost subpaths
    m_vanishingPoint = calculateVanishingPoint(tmp_frontSubpaths, tmp_backSubpaths);
@@ -453,12 +457,35 @@ QPointF TextDepth::deCasteljau(const QPointF& p0, const QPointF& p1, const QPoin
     return result;
 }
 
+std::vector<std::vector<QPainterPath::Element>> TextDepth::getOrganizedPath(const QPainterPath& inputPath)
+{
+    QPainterPath path = inputPath.simplified();
+    std::vector<std::vector<QPainterPath::Element>> res;
+
+    QPointF currentPoint;
+    QPointF p0, p1, p2, p3;
+
+    std::vector<QPainterPath::Element> subpath;
+    for (int i = 0; i < path.elementCount(); ++i) {
+        QPainterPath::Element element = path.elementAt(i);
+
+        subpath.push_back(element);
+        // If the next element is a new subpath, then clear out this subpath's buffer
+        if (i + 1 >= path.elementCount() || path.elementAt(i + 1).type == QPainterPath::MoveToElement)
+        {
+            res.push_back(subpath);
+            subpath.clear();
+        }
+    }
+
+    return res;
+}
 // TODO: This function does 2 things.. try to reduce
 // Thing 1: Goes thru each painterpath element
 // Thing 2: The bezier curves are simplified and the output is all non-bezier points
 
 // ... => PhotoshopWriter doesn't use Thing 2 but can do Thing 1!
-std::vector<std::vector<QPointF>> TextDepth::extractPathPoints(const QPainterPath& tmpPath, int samplesPerCurve)
+std::vector<std::vector<QPointF>> TextDepth::getNonBezierPath(const QPainterPath& tmpPath, int samplesPerCurve)
 {
     QPainterPath path = tmpPath.simplified(); // TODO: remove this guy
                                               // "simplified" should only be done when extracting the path data of the front text

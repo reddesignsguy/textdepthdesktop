@@ -4,14 +4,18 @@
 #include <QQmlEngine>
 #include <PhotoshopAPI.h>
 #include <QPointF>
+#include <QPainterPath>
+#include <qtToPhotoshopAPI.h>
 
 class PhotoshopWriter : public QObject
 {
     Q_OBJECT
     QML_ELEMENT
 public:
+
     PhotoshopWriter(QObject *parent = 0) : QObject(parent){};
-    void write(std::string filename, std::vector<std::vector<QPointF>> subpaths);
+    void write(std::string filename, std::vector<QtToPsApi> subpaths, std::vector<QImage>);
+
 };
 
 #endif // PHOTOSHOPWRITER_H

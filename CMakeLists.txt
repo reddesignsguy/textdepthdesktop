@@ -26,6 +26,8 @@ qt_add_qml_module(appTextDepthOG
         SOURCES textdepth.h textdepth.cpp
         SOURCES PhotoshopWriter.h
         SOURCES photoshopwriter.h photoshopwriter.cpp
+        SOURCES qtToPhotoshopAPI.h
+        SOURCES qtToPhotoshopAPI.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
