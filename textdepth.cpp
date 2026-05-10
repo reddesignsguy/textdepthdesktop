@@ -313,10 +313,15 @@ void TextDepth::writeToPhotoshop()
 {
     PhotoshopWriter writer;
 
+    QtData data;
+    QtTextData textData;
+    QtFrontTextData front;
+    front.vectorMaskData = getOrganizedPath(m_textPath);
 
+    textData.front = front;
+    data.push_back(textData);
 
-    // auto frontSubpaths = flattenBezierPath(m_textPath, 25);
-    writer.write("albonster_test.psd", frontSubpaths);
+    writer.write("TextDepthTest.psd", data);
 }
 
 void TextDepth::createRasterData()

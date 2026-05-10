@@ -14,8 +14,7 @@ class PhotoshopWriter : public QObject
 public:
 
     PhotoshopWriter(QObject *parent = 0) : QObject(parent){};
-    void write(std::string filename, std::vector<QtToPsApi> subpaths, std::vector<QImage>);
-
+    void write(std::string filename, QtData data);
 };
 
 #endif // PHOTOSHOPWRITER_H
