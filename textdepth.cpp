@@ -492,15 +492,7 @@ std::vector<std::vector<QPainterPath::Element>> TextDepth::getOrganizedPath(cons
 // ... => PhotoshopWriter doesn't use Thing 2 but can do Thing 1!
 std::vector<std::vector<QPointF>> TextDepth::getNonBezierPath(const QPainterPath& tmpPath, int samplesPerCurve)
 {
-    QPainterPath path = tmpPath.simplified(); // TODO: remove this guy
-                                              // "simplified" should only be done when extracting the path data of the front text
-                                              // it's needed because QT represents paths weirdly
-                                             // simplified() converts the path such that there are "outer counters" and "inner contours"
-                                            // eg) the hole in the letter "a" or "o" would be an inner contour
-                                             // and these contours are what photoshop expects
-                                                // "simplifying" the path helps with front text, but messes up the back text.. idk why.
-                                               // that's why we should only simplify when trying to export the front path
-                                               // the TODO written before this function overlaps with this TODO as well
+    QPainterPath path = tmpPath;
     std::vector<std::vector<QPointF>> res;
     qDebug() << "num path points: "  << path.elementCount();
     // QList<QPolygonF> subpaths = path.toSubpathPolygons();
