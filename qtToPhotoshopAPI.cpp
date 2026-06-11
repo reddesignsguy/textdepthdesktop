@@ -1,16 +1,6 @@
 #include <qtToPhotoshopAPI.h>
 
-void PsApiRasterLayerInfo::setChannel(Enum::ChannelID channelID, std::vector<bpp8_t> channel) {
-    if (width == -1 || height == -1) {
-        throw std::runtime_error("setChannel(): must initialize width and height first with a non-zero value!");
-    }
-
-    if (channel.size() != width * height) {
-        throw std::runtime_error("setChannel(): the channel passed must have a size equal to width * height!");
-    }
-
-    m_channelMap[channelID] = channel;
-}
+using ChannelID = Enum::ChannelID;
 
 PsApiData qtToPsApi (QtData qtData) {
     using PathPoint = ImageLayer<bpp8_t>::PathPoint;
@@ -92,11 +82,51 @@ PsApiData qtToPsApi (QtData qtData) {
         {
             PsApiFrontTextData psFront;
             {
-                PsApiVectorMask psVMask(psSubPaths);
+                PsApiVectorMask psVMask(psSubPaths, false);
                 psFront.vectorMaskData = psVMask;
             }
             psText.front = psFront;
         }
+
+        // Parse back text
+        const auto & backTextBase = textData.back.baseLayer;
+
+        PsApiRasterLayerInfo rasterLayer;
+
+        std::unordered_map <Enum::ChannelID, std::vector<bpp8_t>> channel_map;
+        int width = backTextBase.width();
+        int height = backTextBase.height();
+
+        channel_map[ChannelID::Red] = std::vector<bpp8_t>(width * height, 0u);
+        channel_map[ChannelID::Green] = std::vector<bpp8_t>(width * height, 0u);
+        channel_map[ChannelID::Blue] = std::vector<bpp8_t>(width * height, 0u);
+        channel_map[ChannelID::Alpha] = std::vector<bpp8_t>(width * height, 0u);
+
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                QColor pixelColor = backTextBase.pixelColor(x, y);
+                int red   = pixelColor.red();
+                int green = pixelColor.green();
+                int blue  = pixelColor.blue();
+                int alpha = pixelColor.alpha();
+
+                int flatIndex = y * width + x;
+                channel_map[ChannelID::Red][flatIndex] = red;
+                channel_map[ChannelID::Green][flatIndex] = green;
+                channel_map[ChannelID::Blue][flatIndex] = blue;
+                channel_map[ChannelID::Alpha][flatIndex] = alpha;
+            }
+        }
+
+        ImageLayer<bpp8_t>::Params layer_params = {};
+        layer_params.name = "BackText";
+        layer_params.width = width;
+        layer_params.height = height;
+
+        layer_params.center_x = 32;
+        layer_params.center_y = 32;
+
+        psText.back.baseLayer = channel_map;
 
         psData.push_back(psText);
     }

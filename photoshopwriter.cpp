@@ -14,6 +14,8 @@ void PhotoshopWriter::write(std::string filename, QtData qtData) {
     LayeredFile<bpp8_t> document = { Enum::ColorMode::RGB, width, height };
     for (const auto & text : psData)
     {
+
+        // front text
         VectorMask vmask = text.front.vectorMaskData;
 
         std::unordered_map <Enum::ChannelID, std::vector<bpp8_t>> channel_map;
@@ -25,8 +27,8 @@ void PhotoshopWriter::write(std::string filename, QtData qtData) {
         layer_params.name = "Layer Red";
         layer_params.width = width;
         layer_params.height = height;
-        layer_params.center_x = 32;
-        layer_params.center_y = 32;
+        layer_params.center_x = width / 2;
+        layer_params.center_y = height / 2;
 
         auto layer = std::make_shared<ImageLayer<bpp8_t>>(
             std::move(channel_map),
@@ -36,8 +38,23 @@ void PhotoshopWriter::write(std::string filename, QtData qtData) {
         layer->set_vector_mask(vmask);
 
         document.add_layer(layer);
+
+        // back text
+        ImageLayer<bpp8_t>::Params back_params = {};
+        back_params.name = "back";
+        back_params.width = width;
+        back_params.height = height;
+        back_params.center_x = width / 2;
+        back_params.center_y = height / 2;
+
+        auto back_layer = std::make_shared<ImageLayer<bpp8_t>>(
+            text.back.baseLayer,
+            back_params
+            );
+
+        document.add_layer(back_layer);
     }
 
+    LayeredFile<bpp8_t>::write(std::move(document), filename);
 
-    LayeredFile<bpp8_t>::write(std::move(document), "TextDepthText.psd");
 }

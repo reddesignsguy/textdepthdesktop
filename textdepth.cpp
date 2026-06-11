@@ -9,18 +9,11 @@ TextDepth::TextDepth(QQuickItem *parent)
     : QQuickPaintedItem(parent)
     , m_text("X")
 {
-    // Set default size
-    setWidth(1080);
-    setHeight(1080);
     resetRasterLayers();
     // TODO: Inject this from UI
     m_coreShadowHiColor = QColor(20, 58, 100);
     m_atmosphereColor = QColor(0,0,0);
     m_coreShadowLoColor = QColor(10, 10, 50);
-
-    // Create initial text path and raster data
-    updateTextPath();
-    createRasterData();
 
     setAcceptedMouseButtons(Qt::AllButtons);
     setAcceptHoverEvents(true); // optional but useful
@@ -315,13 +308,20 @@ void TextDepth::writeToPhotoshop()
 
     QtData data;
     QtTextData textData;
+
     QtFrontTextData front;
     front.vectorMaskData = getOrganizedPath(m_textPath);
-
     textData.front = front;
+
+    QtBackTextData back;
+    back.baseLayer = m_rasterCoreShadowHi;
+    back.clippedLayers.push_back(m_rasterCoreShadowLo);
+    back.clippedLayers.push_back(m_rasterAtmosphere);
+    textData.back = back;
+
     data.push_back(textData);
 
-    writer.write("TextDepthTest.psd", data);
+    writer.write("Bloopy.psd", data);
 }
 
 void TextDepth::createRasterData()

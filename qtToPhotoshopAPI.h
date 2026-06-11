@@ -36,13 +36,7 @@ using QtTextData = TextData<std::vector<std::vector<QPainterPath::Element>>, QIm
 using QtData = std::vector<QtTextData>;
 
 ///////////// 3. structures consumed by PhotoshopAPI /////////////
-struct PsApiRasterLayerInfo {
-    bpp8_t width = 0;
-    bpp8_t height = 0;
-    void setChannel(Enum::ChannelID channelID, std::vector<bpp8_t> channel);
-private:
-    std::unordered_map<Enum::ChannelID, std::vector<bpp8_t>> m_channelMap;
-};
+using PsApiRasterLayerInfo = std::unordered_map<Enum::ChannelID, std::vector<bpp8_t>>;
 using PsApiVectorMask = Layer<bpp8_t>::VectorMask;
 using PsApiBackTextData = BackTextData<PsApiRasterLayerInfo>;
 using PsApiFrontTextData = FrontTextData<PsApiVectorMask, PsApiRasterLayerInfo>;
