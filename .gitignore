@@ -1,0 +1,23 @@
+# Qt Creator local user settings (Never commit this)
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+
+# CMake build directories
+/build/
+/cmake-build-debug/
+/cmake-build-release/
+
+# Compiled Object files
+*.o
+*.obj
+
+# Compiled Libraries
+*.a
+*.lib
+*.so
+*.dylib
+
+# Executables
+*.exe
+*.out
+
