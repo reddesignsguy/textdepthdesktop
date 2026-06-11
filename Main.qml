@@ -58,23 +58,173 @@ Window {
 
             }
         }
-        
-        // TextDepth widget
         Rectangle {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            color: "white"
-            border.color: "#cccccc"
-            border.width: 1
-            radius: 5
-            
-            TextDepth {
-                id: textDepthWidget
-                anchors.centerIn: parent
-                width: parent.width - 40
-                height: parent.height - 40
-                text: textInput.text
-            }
-        }
+                    id: viewport
+
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    color: "#2b2b2b"
+                    clip: true
+
+                    property real zoomFactor: 1.0
+
+                    //
+                    // Infinite scene
+                    //
+                    Item {
+                        id: scene
+
+                        x: scenePosX
+                        y: scenePosY
+
+                        property real scenePosX:
+                            viewport.width / 2 - document.width / 2
+
+                        property real scenePosY:
+                            viewport.height / 2 - document.height / 2
+
+                        scale: viewport.zoomFactor
+                        transformOrigin: Item.TopLeft
+
+                        Rectangle {
+                            id: document
+
+                            width: 2000
+                            height: 2000
+
+                            color: "white"
+                            border.color: "#808080"
+                            border.width: 1
+
+                            TextDepth {
+                                id: textDepthWidget
+
+                                anchors.fill: parent
+                                text: textInput.text
+                            }
+                        }
+                    }
+
+                    //
+                    // Mouse drag pan
+                    //
+                    MouseArea {
+                        anchors.fill: parent
+
+                        acceptedButtons: Qt.MiddleButton | Qt.LeftButton
+
+                        property real lastX
+                        property real lastY
+
+                        onPressed: function(mouse) {
+                            lastX = mouse.x
+                            lastY = mouse.y
+                        }
+
+                        onPositionChanged: function(mouse) {
+                            if (!pressed)
+                                return
+
+                            scene.x += mouse.x - lastX
+                            scene.y += mouse.y - lastY
+
+                            lastX = mouse.x
+                            lastY = mouse.y
+                        }
+                    }
+
+                    //
+                    // Wheel zoom toward cursor
+                    //
+                    WheelHandler {
+                        target: null
+
+                        onWheel: function(event) {
+
+                            var oldZoom = viewport.zoomFactor
+
+                            var zoomStep =
+                                event.angleDelta.y > 0
+                                ? 1.1
+                                : 0.9
+
+                            var newZoom = oldZoom * zoomStep
+
+                            newZoom = Math.max(0.05,
+                                       Math.min(20.0, newZoom))
+
+                            var factor = newZoom / oldZoom
+
+                            var mouseX = event.x
+                            var mouseY = event.y
+
+                            scene.x =
+                                mouseX -
+                                (mouseX - scene.x) * factor
+
+                            scene.y =
+                                mouseY -
+                                (mouseY - scene.y) * factor
+
+                            viewport.zoomFactor = newZoom
+                        }
+                    }
+
+                    //
+                    // Pinch zoom toward pinch center
+                    //
+                    PinchHandler {
+                        id: pinch
+                        target: null
+
+                        property real startZoom
+                        property real startSceneX
+                        property real startSceneY
+                        property real lastScale
+
+                        onActiveChanged: {
+                            if (active) {
+                                startZoom = viewport.zoomFactor
+                                startSceneX = scene.x
+                                startSceneY = scene.y
+                                lastScale = scale
+                                console.log("... staerting")
+                            }
+                        }
+
+                        onScaleChanged: {
+                            var zoomFactor = 0.025
+                            var scaleDelta = scale - lastScale
+
+
+                            var newZoom = viewport.zoomFactor
+                            if (scaleDelta > 0) {
+                                newZoom += zoomFactor
+                            } else if (scaleDelta < 0) {
+                                newZoom -= zoomFactor
+                            }
+
+
+                            newZoom = Math.max(0.05,
+                                               Math.min(20.0, newZoom))
+                            var factor = newZoom / startZoom
+
+                            var px = centroid.position.x
+                            var py = centroid.position.y
+
+                            scene.x =
+                                px - (px - startSceneX) * factor
+
+                            scene.y =
+                                py - (py - startSceneY) * factor
+
+                            viewport.zoomFactor = newZoom
+
+                            lastScale = scale
+                        }
+                    }
+                }
+
     }
 }
