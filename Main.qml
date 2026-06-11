@@ -89,7 +89,8 @@ Window {
 
                         Rectangle {
                             id: document
-
+                            // Todo: allow user to choose canvas size
+                            // https://github.com/reddesignsguy/textdepthdesktop/issues/3
                             width: 2000
                             height: 2000
 
