@@ -876,7 +876,11 @@ void TextDepth::paint(QPainter *painter)
     }
 
     // LAYER 3: Draw main text on top (top layer)
-    painter->setBrush(QColor(50, 120, 200, 255));
+    QLinearGradient gradient(0, m_textPath.boundingRect().bottom(), 0, m_textPath.boundingRect().top());
+    gradient.setColorAt(0.0, Qt::blue);
+    gradient.setColorAt(1.0, Qt::cyan);
+
+    painter->setBrush(gradient);
     painter->drawPath(m_textPath);
 
     // DEBUG: DRAW POINTS
