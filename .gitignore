@@ -21,3 +21,6 @@ CMakeLists.txt.user.*
 *.exe
 *.out
 
+.DS_Store
+
+tmp
