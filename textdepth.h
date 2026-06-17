@@ -109,7 +109,7 @@ public:
 
     void paint(QPainter *painter) override;
     
-    QString text() const { return m_text; }
+    QString text() const { return m_layers[0].m_text; }
     void setText(const QString &text);
 
     // TODO: Refactor me! Im so ugly!
@@ -120,6 +120,32 @@ signals:
     void textChanged();
 
 private:
+    struct TextLayerData {
+        // Base data
+        QString m_text;
+        qreal m_textSize = 450;
+        qreal m_textX;
+        qreal m_textY;
+
+        // Visuals
+        QPainterPath m_textPath;
+
+        // 3D
+        QPointF m_vanishingPoint;
+
+        QImage m_rasterCoreShadowHi;
+        QImage m_rasterCoreShadowLo;
+        QImage m_rasterAtmosphere;
+        QColor m_coreShadowHiColor;
+        QColor m_coreShadowLoColor;
+        QColor m_atmosphereColor;
+
+        TextLayerData() {
+            m_coreShadowHiColor= QColor(20, 58, 100);
+            m_atmosphereColor 	= QColor(0,0,0);
+            m_coreShadowLoColor = QColor(10, 10, 50);
+        }
+    };
     std::vector<Interval> insertInterval(std::vector<Interval> intervals, Interval newInterval);
     std::unordered_map<int, std::vector<TextDepth::Interval>> getScanlineIntervals(std::shared_ptr<IPolygon> polygon, int minY, int maxY, int numScanlines);
 
@@ -127,9 +153,9 @@ private:
 
     std::vector<Quad> getVisibleQuadsOptimized(const std::vector<Quad>& quads, const std::shared_ptr<IPolygon> frontPolygon);
     void updateTextPath();
-    void createRasterData();
+    void createRasterData(TextLayerData data);
     QPointF deCasteljau(const QPointF& p0, const QPointF& p1, const QPointF& p2, const QPointF& p3, qreal t);
-    void renderQuads(const std::vector<Quad> quads);
+    void renderQuads(const std::vector<Quad> quads, TextLayerData data);
 
     // Helper methods for 3D depth effect
 
@@ -143,7 +169,7 @@ private:
 
 
     const void setRasterQuadData(Quad& quad, QColor& color);
-    QColor calculateColorFromAngle(const QPointF& p1, const QPointF& p2); // DEPRECATED
+    // QColor calculateColorFromAngle(const QPointF& p1, const QPointF& p2); // DEPRECATED
     int calculateCoreShadowLoOpacityFromAngle(const QPointF& p1, const QPointF& p2);
     
     // Vanishing point calculation
@@ -151,29 +177,32 @@ private:
                                      const std::vector<std::vector<QPointF>>& backSubpaths);
     QPointF lineIntersection(const QPointF& p1, const QPointF& p2, const QPointF& p3, const QPointF& p4);
     
-    QString m_text;
-    qreal m_textSize = 450;
-    qreal m_textX;
-    qreal m_textY;
+   // QString m_text;
+   // qreal m_textSize = 450;
+   // qreal m_textX;
+   // qreal m_textY;
 
-    QPainterPath m_textPath;
-    QImage m_rasterCoreShadowHi;
-    QImage m_rasterCoreShadowLo;
-    QImage m_rasterAtmosphere;
-    QColor m_coreShadowHiColor;
-    QColor m_coreShadowLoColor;
-    QColor m_atmosphereColor;
+
+    std::vector<TextLayerData> m_layers;
+
+   // QPainterPath m_textPath;
+   // QImage m_rasterCoreShadowHi;
+   // QImage m_rasterCoreShadowLo;
+   // QImage m_rasterAtmosphere;
+   // QColor m_coreShadowHiColor;
+   // QColor m_coreShadowLoColor;
+   // QColor m_atmosphereColor;
 
     bool m_invertCoreShadow = true;
 
-    inline void resetRasterLayers()
+    inline void resetRasterLayers(TextLayerData layer)
     {
-            m_rasterCoreShadowHi = QImage(width(), height(), QImage::Format_ARGB32);
-            m_rasterCoreShadowLo = QImage(width(), height(), QImage::Format_ARGB32);
-            m_rasterAtmosphere = QImage(width(), height(), QImage::Format_ARGB32);
-            m_rasterCoreShadowHi.fill(Qt::transparent);
-            m_rasterCoreShadowLo.fill(Qt::transparent);
-            m_rasterAtmosphere.fill(Qt::transparent);
+            layer.m_rasterCoreShadowHi = QImage(width(), height(), QImage::Format_ARGB32);
+            layer.m_rasterCoreShadowLo = QImage(width(), height(), QImage::Format_ARGB32);
+            layer.m_rasterAtmosphere = QImage(width(), height(), QImage::Format_ARGB32);
+            layer.m_rasterCoreShadowHi.fill(Qt::transparent);
+            layer.m_rasterCoreShadowLo.fill(Qt::transparent);
+            layer.m_rasterAtmosphere.fill(Qt::transparent);
     }
 
     QPointF m_vanishingPoint;

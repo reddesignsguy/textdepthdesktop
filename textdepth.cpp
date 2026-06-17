@@ -7,13 +7,14 @@
 
 TextDepth::TextDepth(QQuickItem *parent)
     : QQuickPaintedItem(parent)
-    , m_text("X")
 {
-    resetRasterLayers();
+    TextLayerData data;
+    m_layers.push_back(data);
+    for (auto & layer : m_layers)
+    {
+        resetRasterLayers(layer);
+    }
     // TODO: Inject this from UI
-    m_coreShadowHiColor = QColor(20, 58, 100);
-    m_atmosphereColor = QColor(0,0,0);
-    m_coreShadowLoColor = QColor(10, 10, 50);
 
     setAcceptedMouseButtons(Qt::AllButtons);
     setAcceptHoverEvents(true); // optional but useful
@@ -22,42 +23,14 @@ TextDepth::TextDepth(QQuickItem *parent)
 
 void TextDepth::setText(const QString &text)
 {
-    if (m_text != text) {
+    if (m_layers.size() > 0)
+    {
+        auto & m_text = m_layers[0].m_text;
         m_text = text;
-        updateTextPath();
-        createRasterData();
+        createRasterData(m_layers[0]);
         emit textChanged();
         update(); // Trigger repaint
     }
-}
-
-void TextDepth::updateTextPath()
-{
-    m_textPath = QPainterPath();
-    
-    if (m_text.isEmpty()) {
-        return;
-    }
-    
-    QFont font;
-    font.setPixelSize(m_textSize);
-    font.setBold(true);
-    
-    // Calculate text position to center it
-    QFontMetrics metrics(font);
-    QRect textRect = metrics.boundingRect(m_text);
-    
-    m_textX = (width() - textRect.width()) / 2.0 - textRect.x();
-    m_textY = (height() + textRect.height()) / 2.0;
-
-    qDebug() << "height: " << height() ;
-    qDebug() << "text rect height: " << height() ;
-    qDebug() << "text rect height: " << height() ;
-    qDebug() << "text y: " << m_textY ;
-    m_textPath.addText(m_textX, m_textY, font, m_text);
-
-    // Set fill rule to WindingFill to properly fill holes in letters like 'e', 'o', 'a'
-    m_textPath.setFillRule(Qt::WindingFill);
 }
 
 // Merge a new interval into a list of existing intervals
@@ -306,6 +279,12 @@ void TextDepth::writeToPhotoshop()
 {
     PhotoshopWriter writer;
 
+    auto & layer = m_layers[0];
+
+    auto & m_rasterCoreShadowHi = layer.m_rasterCoreShadowHi;
+    auto & m_rasterCoreShadowLo = layer.m_rasterCoreShadowLo;
+    auto & m_rasterAtmosphere = layer.m_rasterCoreShadowLo;
+    auto & m_textPath = layer.m_textPath;
     QtData data;
     QtTextData textData;
 
@@ -324,7 +303,7 @@ void TextDepth::writeToPhotoshop()
     writer.write("Bloopy.psd", data);
 }
 
-void TextDepth::createRasterData()
+void TextDepth::createRasterData(TextLayerData data)
 {
     // Create a raster image matching the canvas size
     int imageWidth = static_cast<int>(width());
@@ -335,11 +314,15 @@ void TextDepth::createRasterData()
         imageHeight = 300;
     }
 
-    if (m_textPath.isEmpty()) {
+    if (data.m_textPath.isEmpty()) {
         return;
     }
 
-    resetRasterLayers();
+    resetRasterLayers(data);
+
+    auto & m_text = data.m_text;
+    auto & m_textPath = data.m_textPath;
+    auto & m_textSize = data.m_textSize;
     // Create the smaller back text path (same as in paint())
     QFont smallerFont;
     smallerFont.setPixelSize(m_textSize * 0.8); // 80% of 80
@@ -441,7 +424,7 @@ void TextDepth::createRasterData()
     // do scanlines from the top most point to the bottom X amount of times
     // (we define X -- the amount of scanlines between the top and bottom)
 
-    renderQuads(quads);
+    renderQuads(quads, data);
 }
 
 QPointF TextDepth::deCasteljau(const QPointF& p0, const QPointF& p1, const QPointF& p2, const QPointF& p3, qreal t)
@@ -607,29 +590,29 @@ int TextDepth::calculateCoreShadowLoOpacityFromAngle(const QPointF& p1, const QP
 }
 
 // DEPRECATED
-QColor TextDepth::calculateColorFromAngle(const QPointF& p1, const QPointF& p2)
-{
-    qreal dx = p2.x() - p1.x();
-    qreal dy = p2.y() - p1.y();
-    
-    qreal angle = std::atan2(dy, dx);
-    
-    qreal normalizedAngle = std::abs(angle);
-    if (normalizedAngle > M_PI / 2.0) {
-        normalizedAngle = M_PI - normalizedAngle;
-    }
-    
-    qreal horizontalness = 1.0 - (normalizedAngle / (M_PI / 2.0));
-
-    int minR = m_coreShadowLoColor.red(), minG = m_coreShadowLoColor.green(), minB = m_coreShadowLoColor.blue();
-    int maxR = m_coreShadowHiColor.red(), maxG = m_coreShadowHiColor.green(), maxB = m_coreShadowHiColor.blue();
-    
-    int r = static_cast<int>(minR + (maxR - minR) * (1.0 - horizontalness));
-    int g = static_cast<int>(minG + (maxG - minG) * (1.0 - horizontalness));
-    int b = static_cast<int>(minB + (maxB - minB) * (1.0 - horizontalness));
-    
-    return QColor(r, g, b, 255);
-}
+//QColor TextDepth::calculateColorFromAngle(const QPointF& p1, const QPointF& p2)
+//{
+//    qreal dx = p2.x() - p1.x();
+//    qreal dy = p2.y() - p1.y();
+//
+//    qreal angle = std::atan2(dy, dx);
+//
+//    qreal normalizedAngle = std::abs(angle);
+//    if (normalizedAngle > M_PI / 2.0) {
+//        normalizedAngle = M_PI - normalizedAngle;
+//    }
+//
+//    qreal horizontalness = 1.0 - (normalizedAngle / (M_PI / 2.0));
+//
+//    int minR = m_coreShadowLoColor.red(), minG = m_coreShadowLoColor.green(), minB = m_coreShadowLoColor.blue();
+//    int maxR = m_coreShadowHiColor.red(), maxG = m_coreShadowHiColor.green(), maxB = m_coreShadowHiColor.blue();
+//
+//    int r = static_cast<int>(minR + (maxR - minR) * (1.0 - horizontalness));
+//    int g = static_cast<int>(minG + (maxG - minG) * (1.0 - horizontalness));
+//    int b = static_cast<int>(minB + (maxB - minB) * (1.0 - horizontalness));
+//
+//    return QColor(r, g, b, 255);
+//}
 
 QPointF TextDepth::lineIntersection(const QPointF& p1, const QPointF& p2, const QPointF& p3, const QPointF& p4)
 {
@@ -756,8 +739,12 @@ QPointF TextDepth::calculateVanishingPoint(const std::vector<std::vector<QPointF
 
 }
 
-void TextDepth::renderQuads(const std::vector<Quad> quads)
+void TextDepth::renderQuads(const std::vector<Quad> quads, TextLayerData data)
 {
+    auto & m_coreShadowLoColor = data.m_coreShadowLoColor;
+    auto & m_coreShadowHiColor = data.m_coreShadowHiColor;
+    auto & m_rasterCoreShadowHi = data.m_rasterCoreShadowHi;
+    auto & m_rasterCoreShadowLo = data.m_rasterCoreShadowLo;
     for (int i = 0; i < quads.size(); i++) {
         auto quad = quads[i];
 
@@ -828,61 +815,95 @@ void TextDepth::renderQuads(const std::vector<Quad> quads)
 
 void TextDepth::paint(QPainter *painter)
 {
+    qDebug() << m_layers.size();
+    for (auto & layer : m_layers) {
+        QPainterPath textPath = QPainterPath();
 
-   // painter->scale(m_zoom, m_zoom);
-    painter->setRenderHint(QPainter::Antialiasing);
-    
-    // Draw background
-    painter->fillRect(0, 0, width(), height(), QColor(240, 240, 240));
-    
-    if (m_textPath.isEmpty()) {
-        return;
-    }
+        if (layer.m_text.isEmpty()) {
+            return;
+        }
 
-    // Create smaller duplicate text path (80% of original size)
-    QFont smallerFont;
-    smallerFont.setPixelSize(m_textSize * 0.8); // 80% of 80
-    smallerFont.setBold(true);
-    
-    QFontMetrics smallerMetrics(smallerFont);
-    QRect smallerTextRect = smallerMetrics.boundingRect(m_text);
-    
-    qreal smallerX = (width() - smallerTextRect.width()) / 2.0 - smallerTextRect.x();
-    qreal smallerY = (height() + smallerTextRect.height()) / 2.0;
-    
-    QPainterPath smallerTextPath;
-    smallerTextPath.addText(smallerX, smallerY, smallerFont, m_text);
-    
-    // LAYER 1: Draw smaller duplicate text first (bottom layer)
-    painter->setPen(Qt::NoPen);
+        QFont font;
+        font.setPixelSize(layer.m_textSize);
+        font.setBold(true);
 
-    painter->setBrush(QColor(40, 96, 160));
-    
-    // LAYER 2: Draw pure raster data (middle layer)
-    if (!m_rasterCoreShadowHi.isNull()) {
+        // Calculate text position to center it
+        QFontMetrics metrics(font);
+        auto & m_text = layer.m_text;
+        QRect textRect = metrics.boundingRect(m_text);
+        auto & m_textX = layer.m_textX;
+        auto & m_textY = layer.m_textY;
+        auto & m_textSize = layer.m_textSize;
+
+        m_textX = (width() - textRect.width()) / 2.0 - textRect.x();
+        m_textY = (height() + textRect.height()) / 2.0;
+
+        qDebug() << "height: " << height() ;
+        qDebug() << "text rect height: " << height() ;
+        qDebug() << "text rect height: " << height() ;
+        qDebug() << "text y: " << m_textY ;
+        textPath.addText(m_textX, m_textY, font, m_text);
+
+        // Set fill rule to WindingFill to properly fill holes in letters like 'e', 'o', 'a'
+        textPath.setFillRule(Qt::WindingFill);
+
+       // painter->scale(m_zoom, m_zoom);
+        painter->setRenderHint(QPainter::Antialiasing);
+
+        // Draw background
+        painter->fillRect(0, 0, width(), height(), QColor(240, 240, 240));
+
+        // Create smaller duplicate text path (80% of original size)
+        QFont smallerFont;
+        smallerFont.setPixelSize(m_textSize * 0.8); // 80% of 80
+        smallerFont.setBold(true);
+
+        QFontMetrics smallerMetrics(smallerFont);
+        QRect smallerTextRect = smallerMetrics.boundingRect(m_text);
+
+        qreal smallerX = (width() - smallerTextRect.width()) / 2.0 - smallerTextRect.x();
+        qreal smallerY = (height() + smallerTextRect.height()) / 2.0;
+
+        QPainterPath smallerTextPath;
+        smallerTextPath.addText(smallerX, smallerY, smallerFont, m_text);
+
+        // LAYER 1: Draw smaller duplicate text first (bottom layer)
+        painter->setPen(Qt::NoPen);
+
+        painter->setBrush(QColor(40, 96, 160));
+
+        auto & m_coreShadowLoColor =  layer.m_coreShadowLoColor;
+        auto & m_coreShadowHiColor =  layer.m_coreShadowHiColor;
+        auto & m_rasterCoreShadowHi = layer.m_rasterCoreShadowHi;
+        auto & m_rasterCoreShadowLo = layer.m_rasterCoreShadowLo;
+        auto & m_rasterAtmosphere = layer.m_rasterAtmosphere;
+
+        // LAYER 2: Draw pure raster data (middle layer)
+        if (!m_rasterCoreShadowHi.isNull()) {
         qreal rasterX = (width() - m_rasterCoreShadowHi.width()) / 2.0;
         qreal rasterY = (height() - m_rasterCoreShadowHi.height()) / 2.0;
         painter->drawImage(QPointF(rasterX, rasterY),  m_rasterCoreShadowHi);
-    }
-    if (!m_rasterCoreShadowLo.isNull()) {
+        }
+        if (!m_rasterCoreShadowLo.isNull()) {
         qreal rasterX = (width() - m_rasterCoreShadowLo.width()) / 2.0;
         qreal rasterY = (height() - m_rasterCoreShadowLo.height()) / 2.0;
         painter->drawImage(QPointF(rasterX, rasterY),  m_rasterCoreShadowLo);
-    }
-    if (!m_rasterAtmosphere.isNull()) {
+        }
+        if (!m_rasterAtmosphere.isNull()) {
         qreal rasterX = (width() - m_rasterAtmosphere.width()) / 2.0;
         qreal rasterY = (height() - m_rasterAtmosphere.height()) / 2.0;
         painter->drawImage(QPointF(rasterX, rasterY),  m_rasterAtmosphere);
+        }
+
+        // LAYER 3: Draw main text on top (top layer)
+        QLinearGradient gradient(0, textPath.boundingRect().bottom(), 0, textPath.boundingRect().top());
+        gradient.setColorAt(0.0, Qt::blue);
+        gradient.setColorAt(1.0, Qt::cyan);
+
+        auto & m_textPath = layer.m_textPath;
+        painter->setBrush(gradient);
+        painter->drawPath(m_textPath);
     }
-
-    // LAYER 3: Draw main text on top (top layer)
-    QLinearGradient gradient(0, m_textPath.boundingRect().bottom(), 0, m_textPath.boundingRect().top());
-    gradient.setColorAt(0.0, Qt::blue);
-    gradient.setColorAt(1.0, Qt::cyan);
-
-    painter->setBrush(gradient);
-    painter->drawPath(m_textPath);
-
     // DEBUG: DRAW POINTS
    // {
    //      painter->setPen(Qt::NoPen);
