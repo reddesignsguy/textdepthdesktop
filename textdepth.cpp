@@ -21,16 +21,41 @@ TextDepth::TextDepth(QQuickItem *parent)
 
 }
 
+// TODO: This is just for testin
 void TextDepth::setText(const QString &text)
 {
     if (m_layers.size() > 0)
     {
-        auto & m_text = m_layers[0].m_text;
-        m_text = text;
+        m_layers[0].m_text = text;
+        updateTextPath(m_layers[0]);
         createRasterData(m_layers[0]);
         emit textChanged();
         update(); // Trigger repaint
     }
+}
+
+void TextDepth::updateTextPath(TextLayerData & data)
+{
+    data.m_textPath = QPainterPath();
+
+    if (data.m_text.isEmpty()) {
+        return;
+    }
+
+    QFont font;
+    font.setPixelSize(data.m_textSize);
+    font.setBold(true);
+
+    // TODO: Currently we center it, but in the future we wanna be able to customize it
+    QFontMetrics metrics(font);
+    QRect textRect = metrics.boundingRect(data.m_text);
+
+    data.m_textX = (width() - textRect.width()) / 2.0 - textRect.x();
+    data.m_textY = (height() + textRect.height()) / 2.0;
+    data.m_textPath.addText(data.m_textX, data.m_textY, font, data.m_text);
+
+    // Set fill rule to WindingFill to properly fill holes in letters like 'e', 'o', 'a'
+    data.m_textPath.setFillRule(Qt::WindingFill);
 }
 
 // Merge a new interval into a list of existing intervals
@@ -303,12 +328,12 @@ void TextDepth::writeToPhotoshop()
     writer.write("Bloopy.psd", data);
 }
 
-void TextDepth::createRasterData(TextLayerData data)
+void TextDepth::createRasterData(TextLayerData & data)
 {
     // Create a raster image matching the canvas size
     int imageWidth = static_cast<int>(width());
     int imageHeight = static_cast<int>(height());
-    
+
     if (imageWidth <= 0 || imageHeight <= 0) {
         imageWidth = 400;
         imageHeight = 300;
@@ -410,19 +435,6 @@ void TextDepth::createRasterData(TextLayerData data)
         }
 
         quads = sortedQuads;
-  //  }
-
-  //  for (int i = 0; i < letterToQuads.size(); i ++)
-  //  {
-  //      // This polygon is the one for the front text which is always at the front
-  //      std::shared_ptr<Polygon> frontPolygon = std::make_shared<Polygon>();
-  //      frontPolygon->points = tmp_frontSubpaths[i];
-
-  //      letterToQuads[i] = getVisibleQuadsOptimized(letterToQuads[i], frontPolygon);
-  //  }
-    // Remove concealed quads ------------------------------------------
-    // do scanlines from the top most point to the bottom X amount of times
-    // (we define X -- the amount of scanlines between the top and bottom)
 
     renderQuads(quads, data);
 }
@@ -739,7 +751,7 @@ QPointF TextDepth::calculateVanishingPoint(const std::vector<std::vector<QPointF
 
 }
 
-void TextDepth::renderQuads(const std::vector<Quad> quads, TextLayerData data)
+void TextDepth::renderQuads(const std::vector<Quad> quads, TextLayerData & data)
 {
     auto & m_coreShadowLoColor = data.m_coreShadowLoColor;
     auto & m_coreShadowHiColor = data.m_coreShadowHiColor;
@@ -768,12 +780,12 @@ void TextDepth::renderQuads(const std::vector<Quad> quads, TextLayerData data)
             minY = qMin(minY, p.y());
             maxY = qMax(maxY, p.y());
         }
-
         int startY = qMax(0, static_cast<int>(qFloor(minY)));
         int endY = qMin(m_rasterCoreShadowHi.height() - 1, static_cast<int>(qCeil(maxY)));
 
         // DRAWING ALGORITHM
         // For each "scanline", a horizontal line that goes down the screen every 1 pixel,
+        std::cout<<"minY" << minY<< "maxY:" << maxY<<std::endl;
         //  	Find all the points where the scanline intersects with the quad's edges
         // This loop scales in time complexity based on the text height
         for (int y = startY; y <= endY; ++y) {
@@ -880,9 +892,9 @@ void TextDepth::paint(QPainter *painter)
 
         // LAYER 2: Draw pure raster data (middle layer)
         if (!m_rasterCoreShadowHi.isNull()) {
-        qreal rasterX = (width() - m_rasterCoreShadowHi.width()) / 2.0;
-        qreal rasterY = (height() - m_rasterCoreShadowHi.height()) / 2.0;
-        painter->drawImage(QPointF(rasterX, rasterY),  m_rasterCoreShadowHi);
+            qreal rasterX = (width() - m_rasterCoreShadowHi.width()) / 2.0;
+            qreal rasterY = (height() - m_rasterCoreShadowHi.height()) / 2.0;
+            painter->drawImage(QPointF(rasterX, rasterY),  m_rasterCoreShadowHi);
         }
         if (!m_rasterCoreShadowLo.isNull()) {
         qreal rasterX = (width() - m_rasterCoreShadowLo.width()) / 2.0;

@@ -146,6 +146,9 @@ private:
             m_coreShadowLoColor = QColor(10, 10, 50);
         }
     };
+
+    void updateTextPath(TextLayerData & data);
+
     std::vector<Interval> insertInterval(std::vector<Interval> intervals, Interval newInterval);
     std::unordered_map<int, std::vector<TextDepth::Interval>> getScanlineIntervals(std::shared_ptr<IPolygon> polygon, int minY, int maxY, int numScanlines);
 
@@ -153,9 +156,9 @@ private:
 
     std::vector<Quad> getVisibleQuadsOptimized(const std::vector<Quad>& quads, const std::shared_ptr<IPolygon> frontPolygon);
     void updateTextPath();
-    void createRasterData(TextLayerData data);
+    void createRasterData(TextLayerData & data);
     QPointF deCasteljau(const QPointF& p0, const QPointF& p1, const QPointF& p2, const QPointF& p3, qreal t);
-    void renderQuads(const std::vector<Quad> quads, TextLayerData data);
+    void renderQuads(const std::vector<Quad> quads, TextLayerData & data);
 
     // Helper methods for 3D depth effect
 
@@ -195,14 +198,14 @@ private:
 
     bool m_invertCoreShadow = true;
 
-    inline void resetRasterLayers(TextLayerData layer)
+    inline void resetRasterLayers(TextLayerData & layer)
     {
-            layer.m_rasterCoreShadowHi = QImage(width(), height(), QImage::Format_ARGB32);
-            layer.m_rasterCoreShadowLo = QImage(width(), height(), QImage::Format_ARGB32);
-            layer.m_rasterAtmosphere = QImage(width(), height(), QImage::Format_ARGB32);
-            layer.m_rasterCoreShadowHi.fill(Qt::transparent);
-            layer.m_rasterCoreShadowLo.fill(Qt::transparent);
-            layer.m_rasterAtmosphere.fill(Qt::transparent);
+        layer.m_rasterCoreShadowHi = QImage(width(), height(), QImage::Format_ARGB32);
+        layer.m_rasterCoreShadowLo = QImage(width(), height(), QImage::Format_ARGB32);
+        layer.m_rasterAtmosphere = QImage(width(), height(), QImage::Format_ARGB32);
+        layer.m_rasterCoreShadowHi.fill(Qt::transparent);
+        layer.m_rasterCoreShadowLo.fill(Qt::transparent);
+        layer.m_rasterAtmosphere.fill(Qt::transparent);
     }
 
     QPointF m_vanishingPoint;
