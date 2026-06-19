@@ -120,12 +120,21 @@ signals:
     void textChanged();
 
 private:
+    struct SubTextData {
+        qreal x;
+        qreal y;
+        qreal size;
+    };
+
     struct TextLayerData {
         // Base data
-        QString m_text;
-        qreal m_textSize = 450;
+        QString m_text;         // TODO: Inject sizes upstream
+        qreal m_textSize = 450; //TODO: Name these to be more consistent
         qreal m_textX;
         qreal m_textY;
+
+        // TODO: transition the front text coordinates to be in the same format
+        SubTextData backTextData;
 
         // Visuals
         QPainterPath m_textPath;

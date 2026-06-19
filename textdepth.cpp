@@ -56,6 +56,10 @@ void TextDepth::updateTextPath(TextLayerData & data)
 
     // Set fill rule to WindingFill to properly fill holes in letters like 'e', 'o', 'a'
     data.m_textPath.setFillRule(Qt::WindingFill);
+
+    data.backTextData.size = data.m_textSize * 0.8;
+    data.backTextData.x = data.m_textX;
+    data.backTextData.y = data.m_textY + 50;
 }
 
 // Merge a new interval into a list of existing intervals
@@ -350,23 +354,13 @@ void TextDepth::createRasterData(TextLayerData & data)
     auto & m_textSize = data.m_textSize;
     // Create the smaller back text path (same as in paint())
     QFont smallerFont;
-    smallerFont.setPixelSize(m_textSize * 0.8); // 80% of 80
+    smallerFont.setPixelSize(data.backTextData.size); // 80% of 80
     smallerFont.setBold(true);
-    
-    QFontMetrics smallerMetrics(smallerFont);
-    QRect smallerTextRect = smallerMetrics.boundingRect(m_text);
-    
-    qreal smallerX = (width() - smallerTextRect.width()) / 2.0 - smallerTextRect.x();
-    qreal smallerY = (height() + smallerTextRect.height()) / 2.0 - smallerTextRect.y();
-    
+
     QPainterPath smallerTextPath;
-    smallerTextPath.addText(smallerX, smallerY, smallerFont, m_text);
+    smallerTextPath.addText(data.backTextData.x , data.backTextData.y, smallerFont, m_text);
     smallerTextPath.setFillRule(Qt::WindingFill);
-    
-    // Use toSubpathPolygons() to get individual subpaths for each letter
-    // This prevents conjoining planes between different letters
-    // QList<QPolygonF> frontSubpaths = m_textPath.toSubpathPolygons();
-    // QList<QPolygonF> backSubpaths = smallerTextPath.toSubpathPolygons();
+
     auto tmp_frontSubpaths = getNonBezierPath(m_textPath, 25);
     tmp_points = tmp_frontSubpaths;
     auto tmp_backSubpaths = getNonBezierPath(smallerTextPath, 25);
@@ -398,8 +392,6 @@ void TextDepth::createRasterData(TextLayerData & data)
         std::copy(quadsForThisLetter.begin(), quadsForThisLetter.end(), std::back_inserter(quads));
     }
 
-   // for (int index = 0; index < letterToQuads.size(); index ++)
-   // {
         std::vector<std::pair<int, int>> subpathQuadsDistToVanishingPointIndices;
         int i = 0;
 
@@ -490,8 +482,6 @@ std::vector<std::vector<QPointF>> TextDepth::getNonBezierPath(const QPainterPath
     QPainterPath path = tmpPath;
     std::vector<std::vector<QPointF>> res;
     qDebug() << "num path points: "  << path.elementCount();
-    // QList<QPolygonF> subpaths = path.toSubpathPolygons();
-    // QList<QPolygonF> backSubpaths = smallerTextPath.toSubpathPolygons();
     if (path.isEmpty()) {
         return res;
     }
@@ -849,11 +839,6 @@ void TextDepth::paint(QPainter *painter)
 
         m_textX = (width() - textRect.width()) / 2.0 - textRect.x();
         m_textY = (height() + textRect.height()) / 2.0;
-
-        qDebug() << "height: " << height() ;
-        qDebug() << "text rect height: " << height() ;
-        qDebug() << "text rect height: " << height() ;
-        qDebug() << "text y: " << m_textY ;
         textPath.addText(m_textX, m_textY, font, m_text);
 
         // Set fill rule to WindingFill to properly fill holes in letters like 'e', 'o', 'a'
@@ -865,19 +850,6 @@ void TextDepth::paint(QPainter *painter)
         // Draw background
         painter->fillRect(0, 0, width(), height(), QColor(240, 240, 240));
 
-        // Create smaller duplicate text path (80% of original size)
-        QFont smallerFont;
-        smallerFont.setPixelSize(m_textSize * 0.8); // 80% of 80
-        smallerFont.setBold(true);
-
-        QFontMetrics smallerMetrics(smallerFont);
-        QRect smallerTextRect = smallerMetrics.boundingRect(m_text);
-
-        qreal smallerX = (width() - smallerTextRect.width()) / 2.0 - smallerTextRect.x();
-        qreal smallerY = (height() + smallerTextRect.height()) / 2.0;
-
-        QPainterPath smallerTextPath;
-        smallerTextPath.addText(smallerX, smallerY, smallerFont, m_text);
 
         // LAYER 1: Draw smaller duplicate text first (bottom layer)
         painter->setPen(Qt::NoPen);
