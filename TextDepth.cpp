@@ -1,4 +1,4 @@
-#include "textdepth.h"
+#include "TextDepth.h"
 #include <QFont>
 #include <QFontMetrics>
 #include <QDebug>
@@ -59,7 +59,7 @@ void TextDepth::updateTextPath(TextLayerData & data)
 
     data.backTextData.size = data.m_textSize * 0.8;
     data.backTextData.x = data.m_textX;
-    data.backTextData.y = data.m_textY + 50;
+    data.backTextData.y = data.m_textY + 100;
 }
 
 // Merge a new interval into a list of existing intervals
@@ -924,4 +924,9 @@ void TextDepth::paint(QPainter *painter)
     //     QLineF(tmp1, tmp2),
     //     QLineF(tmp3, tmp4)
     // });
+}
+
+void TextDepth::addLayer(const QString name) {
+    qDebug() << "adding layer from textdepth backend!";
+
 }

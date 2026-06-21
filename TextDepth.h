@@ -112,6 +112,9 @@ public:
     QString text() const { return m_layers[0].m_text; }
     void setText(const QString &text);
 
+    public slots:
+        void addLayer(const QString name);
+
     // TODO: Refactor me! Im so ugly!
     Q_INVOKABLE void writeToPhotoshop();
 

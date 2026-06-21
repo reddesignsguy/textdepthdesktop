@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Quick)
 find_package(Qt6 REQUIRED COMPONENTS Core)
+find_package(Qt6 REQUIRED COMPONENTS Quick)
 
 
 qt_standard_project_setup(REQUIRES 6.8)
@@ -23,12 +24,13 @@ qt_add_qml_module(appTextDepthOG
     VERSION 1.0
     QML_FILES
         Main.qml
-        SOURCES textdepth.h textdepth.cpp
+        SOURCES TextDepth.h TextDepth.cpp
         SOURCES PhotoshopWriter.h
         SOURCES photoshopwriter.h photoshopwriter.cpp
         SOURCES qtToPhotoshopAPI.h
         SOURCES qtToPhotoshopAPI.cpp
         SOURCES LayerUIModel.h LayerUIModel.cpp
+        SOURCES TextDepthViewport.h TextDepthViewport.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -49,6 +51,7 @@ target_link_libraries(appTextDepthOG
 add_subdirectory(PhotoshopAPI)
 target_link_libraries(appTextDepthOG PRIVATE PhotoshopAPI)
 target_link_libraries(appTextDepthOG PRIVATE Qt6::Core)
+target_link_libraries(appTextDepthOG PRIVATE Qt6::Quick)
 
 include(GNUInstallDirs)
 install(TARGETS appTextDepthOG

@@ -100,7 +100,7 @@ Window {
                     border.color: "#808080"
                     border.width: 1
 
-                    TextDepth {
+                    TextDepthViewport {
                     id: textDepthWidget
 
                     anchors.fill: parent

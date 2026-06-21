@@ -1,7 +1,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQMLContext>
- #include <textdepth.h>
+ #include <TextDepth.h>
 #include "LayerUIModel.h"
 
 
@@ -11,10 +11,18 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     LayerUIModel layerModel;
+    TextDepth backend;
 
     engine.rootContext()->setContextProperty(
         "layerModel",
         &layerModel);
+
+    QObject::connect(
+        &layerModel,
+        &LayerUIModel::addLayerSignal,
+        &backend,
+        &TextDepth::addLayer
+        );
 
     QObject::connect(
         &engine,

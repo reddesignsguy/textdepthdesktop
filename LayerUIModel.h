@@ -40,6 +40,9 @@ public:
     Q_INVOKABLE void addLayer(const QString& name);
     Q_INVOKABLE void removeLayer(int row);
 
+signals:
+    void addLayerSignal(const QString name);
+
 private:
     QVector<LayerUIData> m_layers;
 };

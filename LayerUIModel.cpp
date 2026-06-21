@@ -83,7 +83,9 @@ void LayerUIModel::addLayer(const QString& name)
     for (const auto& layer : m_layers)
         std::cout << layer.name.toStdString()   << std::endl;
     endInsertRows();
+    emit addLayerSignal(name);
 }
+
 void LayerUIModel::removeLayer(int row)
 {
     if (row < 0 || row >= m_layers.size())
