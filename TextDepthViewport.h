@@ -1,7 +1,8 @@
 #ifndef TEXTDEPTHVIEWPORT_H
 #define TEXTDEPTHVIEWPORT_H
 
-
+#include <QList>
+#include <drawable.h>
 #include <QQuickPaintedItem>
 #include <iostream>
 
@@ -9,7 +10,7 @@ class TextDepthViewport : public QQuickPaintedItem
 {
     Q_OBJECT
     QML_ELEMENT
-    Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
+    // Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
 public:
     TextDepthViewport(QQuickItem *parent = nullptr);
 
@@ -31,11 +32,18 @@ public:
 
     QString text() const { std::cout<< "hi"<<std::endl; }
     void setText(const QString &text);
-
+    void draw();
     // TODO: Refactor me! Im so ugly!
     // Q_INVOKABLE void writeToPhotoshop();
 signals:
     void textChanged();
+
+public slots:
+    void drawLayers(std::vector<TextDrawable> texts);
+    void handleNewQtData(const QtData &qData);
+
+private:
+    std::vector<std::unique_ptr<Drawable>> m_thingsToDraw;
 };
 
 #endif // TEXTDEPTHVIEWPORT_H

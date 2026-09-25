@@ -1,4 +1,5 @@
 #include "TextDepthViewport.h"
+#include <QDebug>
 
 TextDepthViewport::TextDepthViewport(QQuickItem *parent)
     : QQuickPaintedItem(parent)
@@ -10,7 +11,7 @@ TextDepthViewport::TextDepthViewport(QQuickItem *parent)
 //        resetRasterLayers(layer);
 //    }
     // TODO: Inject this from UI
-
+    qDebug() << Q_FUNC_INFO;
     setAcceptedMouseButtons(Qt::AllButtons);
     setAcceptHoverEvents(true); // optional but useful
 
@@ -27,8 +28,112 @@ void TextDepthViewport::setText(const QString &text)
     //    update(); // Trigger repaint
     //}
 }
+
+void TextDepthViewport::drawLayers(std::vector<TextDrawable> layers) {
+    for (auto & layer : layers)
+    {
+        m_thingsToDraw.push_back(std::make_unique<TextDrawable>(layer));
+    }
+    update();
+}
+
+void TextDepthViewport::handleNewQtData(const QtData &qData)
+{
+    qDebug() << Q_FUNC_INFO;
+    m_thingsToDraw.clear();
+    std::cout<< "handle new qt data!" << std::endl;
+    qDebug() << "Albany says hi";
+
+    for (const QtTextData &textData : qData) {
+        auto textDrawable = std::make_unique<TextDrawable>();
+
+        const auto addImage = [&textDrawable](const QImage &image) {
+            if (!image.isNull()) {
+                ImageDrawable drawable;
+                drawable.image = image;
+                drawable.point = QPointF(0, 0);
+                textDrawable->backTextLayers.push_back(std::move(drawable));
+            }
+        };
+        addImage(textData.back.baseLayer);
+        for (const QImage &image : textData.back.clippedLayers) {
+            addImage(image);
+        }
+
+        //QPainterPath path;
+        //for (const auto &subPath : textData.front.vectorMaskData) {
+
+        //    std::pair<double, double> leavingControlPointOfLastPoint;
+        //    for (std::size_t index = 0; index < subPath.size(); ++index) {
+        //        const QPainterPath::Element &element = subPath[index];
+        //        if (element.type == QPainterPath::MoveToElement) {
+        //            path.moveTo(element.x, element.y);
+        //            leavingControlPointOfLastPoint.first = element.x;
+        //            leavingControlPointOfLastPoint.second = element.y;
+        //        } else if (element.type == QPainterPath::LineToElement) {
+        //            qDebug() << "Normal element:" << element.x << element.y ;
+        //            path.lineTo(element.x, element.y);
+        //            leavingControlPointOfLastPoint.first = element.x;
+        //            leavingControlPointOfLastPoint.second = element.y;
+        //        } else if (element.type == QPainterPath::CurveToElement &&
+        //                   index + 2 < subPath.size()) {
+
+        //            qDebug() << "Curve to element!!!";
+        //            const auto secondPt= subPath[index + 1];
+        //            const auto endPoint = subPath[index + 2];
+        //            if (secondPt.type == QPainterPath::CurveToDataElement &&
+        //                endPoint.type == QPainterPath::CurveToDataElement) {
+        //                qDebug() << "Curve to data element!!!";
+        //                qDebug() << "Element:" << element.x << element.y << "| secondPt:" << secondPt.x << secondPt.y << "| End:" << endPoint.x << endPoint.y;
+
+        //                path.cubicTo(element.x, element.y,
+        //                             element.x, element.y,
+        //                             endPoint.x, endPoint.y);
+        //                //path.cubicTo(control2.x, control2.y,
+        //                //             element.x, element.y,
+        //                //             endPoint.x, endPoint.y);
+        //                index += 2;
+        //                if (element.x == 989 && element.y == 496) {
+        //                    //qDebug() << "Breaking at investigation point!";
+        //                    //break;
+        //                } else if (endPoint.x == 933 && endPoint.y == 445) {
+        //                    qDebug() << "Breaking at investigation point!";
+        //                    break;
+
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
+
+        textDrawable->frontText.path = textData.front.vectorMaskData;
+
+        // ew!
+        ImageDrawable baseDrawable;
+        baseDrawable.image = textData.front.baseLayer;
+        baseDrawable.point = QPointF(0, 0);
+
+        textDrawable->frontTextBase = baseDrawable;
+        m_thingsToDraw.push_back(std::move(textDrawable));
+    }
+
+    update();
+}
+
 void TextDepthViewport::paint(QPainter *painter)
 {
+
+
+    painter->setBrush(QColor(133, 23, 23));
+    painter->fillRect(this->boundingRect(), QColor(0,255,0));
+    painter->setBrush(QColor(0,0,200, 255));
+    painter->drawEllipse(0,0,100,100);
+    painter->drawRect(1820, 980, 100, 100);
+    // Go through its buffer of layers and draw them
+    for (auto& drawable : m_thingsToDraw) {
+        drawable->draw(painter);
+    }
+
 //    qDebug() << m_layers.size();
 //    for (auto & layer : m_layers) {
 //        QPainterPath textPath = QPainterPath();

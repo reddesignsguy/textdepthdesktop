@@ -39,6 +39,7 @@ Window {
                     text: "Export to PSD"
 
                     onClicked: {
+                        console.log("This should fail!")
                          textDepthWidget.writeToPhotoshop();
                     }
 
@@ -93,18 +94,25 @@ Window {
                     id: document
                     // Todo: allow user to choose canvas size
                     // https://github.com/reddesignsguy/textdepthdesktop/issues/3
-                    width: 2000
-                    height: 2000
+                    width: 1920
+                    height: 1080
 
                     color: "white"
                     border.color: "#808080"
                     border.width: 1
 
-                    TextDepthViewport {
-                    id: textDepthWidget
+                    Item {
+                        id: textDepthViewportHost
+                        anchors.fill: parent
 
-                    anchors.fill: parent
-                    text: textInput.text
+                        Component.onCompleted: {
+                            textDepthWidget.parent = textDepthViewportHost
+                            textDepthWidget.width = width
+                            textDepthWidget.height = height
+                        }
+
+                        onWidthChanged: textDepthWidget.width = width
+                        onHeightChanged: textDepthWidget.height = height
                     }
                 }
                 }
