@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import TextDepthOG
 
 Window {
@@ -9,6 +10,41 @@ Window {
     visible: true
     title: qsTr("TextDepth Demo")
     color: "#212121"
+
+    Action {
+        id: openPsdAction
+        text: qsTr("Open PSD…")
+        shortcut: StandardKey.Open
+        onTriggered: psdFileDialog.open()
+    }
+
+    Action {
+        id: exportPsdAction
+        text: qsTr("Export to PSD")
+        onTriggered: textDepthBackend.writeToPhotoshop()
+    }
+
+    FileDialog {
+        id: psdFileDialog
+        title: qsTr("Open PSD")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("Photoshop documents (*.psd)")]
+        onAccepted: textDepthBackend.loadPsd(selectedFile)
+    }
+
+    MessageDialog {
+        id: loadErrorDialog
+        title: qsTr("Unable to open PSD")
+        buttons: MessageDialog.Ok
+    }
+
+    Connections {
+        target: textDepthBackend
+        function onPsdLoadFailed(message) {
+            loadErrorDialog.text = message
+            loadErrorDialog.open()
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -32,17 +68,9 @@ Window {
                     font.pixelSize: 14
                     font.bold: true
                 }
-                Button {
-                    id: tmp_Save
-                    width: 50
-                    font.pixelSize: 16
-                    text: "Export to PSD"
-
-                    onClicked: {
-                        console.log("This should fail!")
-                         textDepthWidget.writeToPhotoshop();
-                    }
-
+                ActionToolBar {
+                    Layout.fillWidth: true
+                    actions: [openPsdAction, exportPsdAction]
                 }
                 TextField {
                     id: textInput
@@ -51,7 +79,7 @@ Window {
                     text: "o"
                     font.pixelSize: 16
                     onTextChanged: {
-                        textDepthWidget.text = text
+                        textDepthBackend.text = text
                     }
                 }
 

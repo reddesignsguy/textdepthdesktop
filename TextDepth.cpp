@@ -2,12 +2,92 @@
 #include <QFont>
 #include <QFontMetrics>
 #include <QDebug>
+#include <QFile>
 #include <cmath>
 #include <limits>
+#include <exception>
+#include <filesystem>
+#include <utility>
 #include "qtToPhotoshopAPI.h"
 
 TextDepth::TextDepth(qreal width, qreal height, QObject *parent) : m_width(width), m_height(height), QObject(parent)
 {
+}
+
+// This is ChatGPT Generated
+bool TextDepth::loadPsd(const QUrl &fileUrl)
+{
+    if (!fileUrl.isLocalFile()) {
+        emit psdLoadFailed(tr("Please choose a local PSD file."));
+        return false;
+    }
+
+    // ChatGPT Explanation:
+    // PhotoshopAPI memory-maps its input. Reject missing/truncated headers before
+    // handing it a file, since those can fail before the parser throws an error.
+    QFile input(fileUrl.toLocalFile());
+    if (!input.open(QIODevice::ReadOnly)) {
+        emit psdLoadFailed(tr("Could not open the PSD: %1").arg(input.errorString()));
+        return false;
+    }
+    input.close();
+
+    try {
+        const auto path = std::filesystem::path(fileUrl.toString().toStdString());
+        auto layeredFile = LayeredFile<bpp8_t>::read(path);
+        auto targets = find_layer_as<bpp8_t, GroupLayer>("targets", layeredFile);
+        if (!targets) {
+            emit psdLoadFailed(tr("The PSD must contain a group named 'targets'."));
+            return false;
+        }
+
+        PsApiData extracted;
+        for (const auto &layer : targets->layers()) {
+            const auto imageLayer = std::dynamic_pointer_cast<ImageLayer<bpp8_t>>(layer);
+            if (!imageLayer || !imageLayer->m_vectorMask)
+                continue;
+
+            PsApiTextData textData;
+            textData.front.vectorMaskData = *imageLayer->m_vectorMask;
+            extracted.push_back(std::move(textData));
+        }
+
+        // Preserve the original demo's selection and depth treatment.
+        // Stage the result so a failed import leaves the current document intact.
+        constexpr size_t depthLayerIndex = 2;
+        if (extracted.size() <= depthLayerIndex) {
+            emit psdLoadFailed(tr("The 'targets' group must contain at least three image layers with vector masks."));
+            return false;
+        }
+        auto nextData = psApiToQt(extracted, m_width, m_height);
+        auto &text = nextData[depthLayerIndex];
+        const auto &frontPath = text.front.vectorMaskData;
+        const auto center = frontPath.boundingRect().center();
+        QTransform transform;
+        transform.translate(center.x(), center.y());
+        transform.scale(0.8, 0.8);
+        transform.translate(-center.x(), -center.y());
+        transform.translate(0, 130);
+        const auto backPath = frontPath * transform;
+
+        QImage baseFront(m_width, m_height, QImage::Format_ARGB32);
+        baseFront.fill(QColor(255, 172, 0));
+        text.front.baseLayer = baseFront;
+
+        const QColor hi(133, 67, 14);
+        const QColor lo(77, 24, 0);
+        const auto quads = createFrontAndBackConnection(frontPath, backPath);
+        text.back.baseLayer = createBackLayerBase(quads, hi);
+        text.back.clippedLayers.push_back(createBackLayerShadows(quads, lo, hi));
+
+        m_qtData = std::move(nextData);
+    } catch (const std::exception &error) {
+        emit psdLoadFailed(tr("Could not load the PSD: %1").arg(QString::fromUtf8(error.what())));
+        return false;
+    }
+
+    publishQtData();
+    return true;
 }
 
 void TextDepth::publishQtData()

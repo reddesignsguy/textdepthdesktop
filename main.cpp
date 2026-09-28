@@ -22,6 +22,8 @@ int main(int argc, char *argv[])
         "textDepthWidget",
         &frontend);
 
+    engine.rootContext()->setContextProperty("textDepthBackend", &backend);
+
     QObject::connect(
         &layerModel,
         &LayerUIModel::addLayerSignal,
@@ -33,7 +35,6 @@ int main(int argc, char *argv[])
         &TextDepth::notifyNewQtData,
         &frontend,
         &TextDepthViewport::handleNewQtData);
-    backend.remove_me_loadPsdAndPublish();
 
     QObject::connect(
         &engine,

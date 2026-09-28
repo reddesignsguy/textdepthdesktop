@@ -24,6 +24,7 @@ qt_add_qml_module(appTextDepthOG
     VERSION 1.0
     QML_FILES
         Main.qml
+        ActionToolBar.qml
         SOURCES TextDepth.h TextDepth.cpp
         SOURCES PhotoshopWriter.h
         SOURCES photoshopwriter.h photoshopwriter.cpp
@@ -60,3 +61,16 @@ install(TARGETS appTextDepthOG
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+option(TEXTDEPTH_BUILD_TESTS "Build PSD loading regression tests" OFF)
+if(TEXTDEPTH_BUILD_TESTS)
+    enable_testing()
+    qt_add_executable(textdepth_psd_loading_test
+        tests/psd_loading.cpp
+        TextDepth.h TextDepth.cpp
+        PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
+    )
+    target_include_directories(textdepth_psd_loading_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(textdepth_psd_loading_test PRIVATE Qt6::Quick PhotoshopAPI)
+    add_test(NAME psd_loading COMMAND textdepth_psd_loading_test)
+endif()

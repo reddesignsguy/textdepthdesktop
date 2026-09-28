@@ -68,7 +68,7 @@ QtData psApiToQt(const PsApiData& psData, int width, int height)
 
 
             //append(point.m_anchor, QPainterPath::MoveToElement);
-            if (subPath.m_points.size() < 0) {
+            if (subPath.m_points.empty()) {
                 continue;
             }
 
