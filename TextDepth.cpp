@@ -43,7 +43,7 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
             return false;
         }
 
-        PsApiData extracted;
+        PsApiLayersDto extracted;
         for (const auto &layer : targets->layers()) {
             // 2. Every group within "targets" is considered a "text"; Anything other than that will be ignored and lost.
             const auto groupLayer = std::dynamic_pointer_cast<GroupLayer<bpp8_t>>(layer);
