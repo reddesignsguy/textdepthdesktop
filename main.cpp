@@ -8,7 +8,7 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
-    qRegisterMetaType<QtData>("QtData");
+    qRegisterMetaType<TextDepthUnits>("QtData");
 
     QQmlApplicationEngine engine;
     LayerUIModel layerModel;

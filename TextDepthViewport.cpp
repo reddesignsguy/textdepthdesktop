@@ -37,14 +37,14 @@ void TextDepthViewport::drawLayers(std::vector<TextDrawable> layers) {
     update();
 }
 
-void TextDepthViewport::handleNewQtData(const QtData &qData)
+void TextDepthViewport::handleNewQtData(const TextDepthUnits &qData)
 {
     qDebug() << Q_FUNC_INFO;
     m_thingsToDraw.clear();
     std::cout<< "handle new qt data!" << std::endl;
     qDebug() << "Albany says hi";
 
-    for (const QtTextData &textData : qData) {
+    for (const TextDepthUnit &textData : qData) {
         auto textDrawable = std::make_unique<TextDrawable>();
 
         const auto addImage = [&textDrawable](const QImage &image) {

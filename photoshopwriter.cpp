@@ -1,6 +1,6 @@
 #include "PhotoshopWriter.h"
 
-void PhotoshopWriter::write(std::string filename, QtData qtData)
+void PhotoshopWriter::write(std::string filename, TextDepthUnits qtData)
 {
     qDebug() << "Writing to: " << filename;
 

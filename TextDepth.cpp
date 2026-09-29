@@ -403,8 +403,8 @@ void TextDepth::writeToPhotoshop()
     //auto &m_rasterCoreShadowLo = layer.m_rasterCoreShadowLo;
     //auto &m_rasterAtmosphere = layer.m_rasterCoreShadowLo;
     //auto &m_textPath = layer.m_textPath;
-    QtData data;
-    QtTextData textData;
+    TextDepthUnits data;
+    TextDepthUnit textData;
 
     //QtFrontTextData front;
     //front.vectorMaskData = getOrganizedPath(m_textPath);

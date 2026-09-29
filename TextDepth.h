@@ -123,12 +123,12 @@ signals:
     void psdLoadFailed(const QString &message);
     void textChanged(); // probs dont need dis
     void layersChanged(std::vector<TextDrawable> texts);
-    void notifyNewQtData(const QtData &qData);
+    void notifyNewQtData(const TextDepthUnits &qData);
 
 private:
     int m_width;
     int m_height;
-    QtData m_qtData;
+    TextDepthUnits m_qtData;
 
     struct TextLayerData
     {

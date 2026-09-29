@@ -4,7 +4,7 @@
 
 using ChannelID = Enum::ChannelID;
 
-QtData psApiToQt(const PsApiLayersDto& psData, int width, int height)
+TextDepthUnits psApiToQt(const PsApiLayersDto& psData, int width, int height)
 {
     if (width <= 0 || height <= 0) {
         throw std::invalid_argument("psApiToQt requires positive image dimensions");
@@ -43,10 +43,10 @@ QtData psApiToQt(const PsApiLayersDto& psData, int width, int height)
         return image;
     };
 
-    QtData qtData;
+    TextDepthUnits qtData;
     qtData.reserve(psData.size());
     for (const auto& text : psData) {
-        QtTextData qtText;
+        TextDepthUnit qtText;
         qtText.front.baseLayer = toImage(text.front.baseLayer);
         qtText.back.baseLayer = toImage(text.back.baseLayer);
         for (const auto& layer : text.front.clippedLayers) {
@@ -108,7 +108,7 @@ QtData psApiToQt(const PsApiLayersDto& psData, int width, int height)
     return qtData;
 }
 
-PsApiLayersDto qtToPsApi (QtData qtData) {
+PsApiLayersDto qtToPsApi (TextDepthUnits qtData) {
     // TODO: Reimplement me! Broken because data type of frontText.vectorMaskData changed from std::vector<std::vector<QPainterPath::Element>> to QPainterPath
     using PathPoint = ImageLayer<bpp8_t>::PathPoint;
     using SubPath = ImageLayer<bpp8_t>::SubPath;
