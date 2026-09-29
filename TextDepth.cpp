@@ -33,8 +33,10 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
     input.close();
 
     try {
-        const auto path = std::filesystem::path(fileUrl.toString().toStdString());
+        const auto path = std::filesystem::path(fileUrl.toLocalFile().toStdString());
         auto layeredFile = LayeredFile<bpp8_t>::read(path);
+
+        // 1. Find "targets" group containing our text group layers
         auto targets = find_layer_as<bpp8_t, GroupLayer>("targets", layeredFile);
         if (!targets) {
             emit psdLoadFailed(tr("The PSD must contain a group named 'targets'."));
@@ -43,24 +45,41 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
 
         PsApiData extracted;
         for (const auto &layer : targets->layers()) {
-            const auto imageLayer = std::dynamic_pointer_cast<ImageLayer<bpp8_t>>(layer);
-            if (!imageLayer || !imageLayer->m_vectorMask)
+            // 2. Every group within "targets" is considered a "text"; Anything other than that will be ignored and lost.
+            const auto groupLayer = std::dynamic_pointer_cast<GroupLayer<bpp8_t>>(layer);
+            if (!groupLayer) {
+                qDebug() << "Warning: 'targets' group contained a non-group layer '" << layer->name() << "'. Ignoring.";
                 continue;
+            }
 
-            PsApiTextData textData;
-            textData.front.vectorMaskData = *imageLayer->m_vectorMask;
-            extracted.push_back(std::move(textData));
+            // 3. Get each component of the text.. i.e:
+            // The "front text" comprising of an image layer with a vector mask and any clipping masks on it
+            // The "back text" comprising of an image layer with any clipping masks on it
+            // Anything other than that is ignored and lost.
+            for (const auto& layer : groupLayer->layers()) {
+                const auto imageLayer = std::dynamic_pointer_cast<ImageLayer<bpp8_t>>(layer);
+                // layer->clipping_mask()
+                if (!imageLayer || !imageLayer->m_vectorMask) {
+                    qDebug() << "Warning: group layer '" << groupLayer->name() << "' contained an invalid layer '" << layer->name() << "'. Ignoring.";
+                    continue;
+                }
+                qDebug() << "albany is cool" << layer->name();
+                PsApiTextData textData;
+                textData.front.vectorMaskData = *imageLayer->m_vectorMask;
+                using chan = Enum::ChannelID;
+                textData.front.baseLayer[chan::Red] = imageLayer->get_channel(chan::Red);
+                textData.front.baseLayer[chan::Green] = imageLayer->get_channel(chan::Green);
+                textData.front.baseLayer[chan::Blue] = imageLayer->get_channel(chan::Blue);
+                textData.front.baseLayer[chan::Alpha] = imageLayer->get_channel(chan::Alpha);
+
+                extracted.push_back(std::move(textData));
+            }
         }
 
-        // Preserve the original demo's selection and depth treatment.
-        // Stage the result so a failed import leaves the current document intact.
-        constexpr size_t depthLayerIndex = 2;
-        if (extracted.size() <= depthLayerIndex) {
-            emit psdLoadFailed(tr("The 'targets' group must contain at least three image layers with vector masks."));
-            return false;
-        }
         auto nextData = psApiToQt(extracted, m_width, m_height);
-        auto &text = nextData[depthLayerIndex];
+
+        // Temp demo: Create the extrusions =================
+        auto &text = nextData[2];
         const auto &frontPath = text.front.vectorMaskData;
         const auto center = frontPath.boundingRect().center();
         QTransform transform;
@@ -69,17 +88,12 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
         transform.translate(-center.x(), -center.y());
         transform.translate(0, 130);
         const auto backPath = frontPath * transform;
-
-        QImage baseFront(m_width, m_height, QImage::Format_ARGB32);
-        baseFront.fill(QColor(255, 172, 0));
-        text.front.baseLayer = baseFront;
-
         const QColor hi(133, 67, 14);
         const QColor lo(77, 24, 0);
         const auto quads = createFrontAndBackConnection(frontPath, backPath);
         text.back.baseLayer = createBackLayerBase(quads, hi);
         text.back.clippedLayers.push_back(createBackLayerShadows(quads, lo, hi));
-
+        // Done ===========================
         m_qtData = std::move(nextData);
     } catch (const std::exception &error) {
         emit psdLoadFailed(tr("Could not load the PSD: %1").arg(QString::fromUtf8(error.what())));

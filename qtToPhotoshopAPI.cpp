@@ -14,11 +14,12 @@ QtData psApiToQt(const PsApiData& psData, int width, int height)
         if (channels.empty()) {
             return QImage{};
         }
+        // TODO: It shoulld be allowed to import layers that have dimensions less or greater than the canvas size
         for (auto channel : {ChannelID::Red, ChannelID::Green, ChannelID::Blue}) {
             const auto it = channels.find(channel);
-            if (it == channels.end() || it->second.size() != pixelCount) {
-                throw std::invalid_argument("psApiToQt requires RGB channels matching the image dimensions");
-            }
+           if (it == channels.end() || it->second.size() != pixelCount) {
+               throw std::invalid_argument("psApiToQt requires RGB channels matching the image dimensions");
+           }
         }
         const auto alpha = channels.find(ChannelID::Alpha);
         if (alpha != channels.end() && alpha->second.size() != pixelCount) {

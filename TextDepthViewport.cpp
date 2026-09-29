@@ -123,12 +123,6 @@ void TextDepthViewport::handleNewQtData(const QtData &qData)
 void TextDepthViewport::paint(QPainter *painter)
 {
 
-
-    painter->setBrush(QColor(133, 23, 23));
-    painter->fillRect(this->boundingRect(), QColor(0,255,0));
-    painter->setBrush(QColor(0,0,200, 255));
-    painter->drawEllipse(0,0,100,100);
-    painter->drawRect(1820, 980, 100, 100);
     // Go through its buffer of layers and draw them
     for (auto& drawable : m_thingsToDraw) {
         drawable->draw(painter);
