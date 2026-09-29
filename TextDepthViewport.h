@@ -2,6 +2,7 @@
 #define TEXTDEPTHVIEWPORT_H
 
 #include <QList>
+#include "TextDepthUnit.h"
 #include <drawable.h>
 #include <QQuickPaintedItem>
 #include <iostream>

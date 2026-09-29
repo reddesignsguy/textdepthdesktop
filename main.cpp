@@ -2,13 +2,14 @@
 #include <QQmlApplicationEngine>
 #include <QQMLContext>
 #include <TextDepth.h>
+#include "TextDepthUnit.h"
 #include "LayerUIModel.h"
 #include <TextDepthViewport.h>
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
-    qRegisterMetaType<TextDepthUnits>("QtData");
+    qRegisterMetaType<TextDepthUnits>("TextDepthUnits");
 
     QQmlApplicationEngine engine;
     LayerUIModel layerModel;

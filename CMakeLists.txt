@@ -26,6 +26,7 @@ qt_add_qml_module(appTextDepthOG
         Main.qml
         ActionToolBar.qml
         SOURCES TextDepth.h TextDepth.cpp
+        SOURCES TextDepthUnit.h TextDepthUnit.cpp
         SOURCES PhotoshopWriter.h
         SOURCES photoshopwriter.h photoshopwriter.cpp
         SOURCES qtToPhotoshopAPI.h
@@ -33,7 +34,6 @@ qt_add_qml_module(appTextDepthOG
         SOURCES LayerUIModel.h LayerUIModel.cpp
         SOURCES TextDepthViewport.h TextDepthViewport.cpp
         SOURCES drawable.h
-        SOURCES
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -69,6 +69,7 @@ if(TEXTDEPTH_BUILD_TESTS)
     qt_add_executable(textdepth_psd_loading_test
         tests/psd_loading.cpp
         TextDepth.h TextDepth.cpp
+        TextDepthUnit.h TextDepthUnit.cpp
         PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
     )
     target_include_directories(textdepth_psd_loading_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

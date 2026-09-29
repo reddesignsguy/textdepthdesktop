@@ -1,4 +1,5 @@
 #include "TextDepth.h"
+#include "PhotoshopWriter.h"
 #include <QFont>
 #include <QFontMetrics>
 #include <QDebug>

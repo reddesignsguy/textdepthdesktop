@@ -2,10 +2,8 @@
 #define DRAWABLE_H
 #include <QPainterPath>
 #include <QPainter>
-#include <qtToPhotoshopAPI.h> // only used to export the structs in section 1
-                              // TODO: Might be able to consolidate those structs in its own section because
-                              // it's clearly used for more than just qt 2 photoshop stuff
-                              // however.. might be the wrong abstractoin.. let's just code and see where everything lands
+#include <QImage>
+#include <vector>
 
 struct Drawable
 {

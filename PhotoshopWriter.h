@@ -2,10 +2,8 @@
 #define PHOTOSHOPWRITER_H
 
 #include <QQmlEngine>
-#include <PhotoshopAPI.h>
-#include <QPointF>
-#include <QPainterPath>
-#include <qtToPhotoshopAPI.h>
+#include "TextDepthUnit.h"
+#include <string>
 
 class PhotoshopWriter : public QObject
 {

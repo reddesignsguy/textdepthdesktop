@@ -1,34 +1,12 @@
 #ifndef QTTOPHOTOSHOPAPI_H
 #define QTTOPHOTOSHOPAPI_H
 
-#include <QPainterPath>
-#include <QImage>
-#include <QMetaType>
+#include "TextDepthUnit.h"
 #include <unordered_map>
 #include <vector>
 #include <PhotoshopAPI.h>
 
 using namespace NAMESPACE_PSAPI;
-
-// Structures prepared by the Qt application.
-struct Back {
-    QImage baseLayer;
-    std::vector<QImage> clippedLayers;
-};
-
-struct Front {
-    QPainterPath vectorMaskData;
-    QImage baseLayer;
-    std::vector<QImage> clippedLayers;
-};
-
-struct TextDepthUnit {
-    Front front;
-    Back back;
-};
-
-using TextDepthUnits = std::vector<TextDepthUnit>;
-Q_DECLARE_METATYPE(TextDepthUnits)
 
 // Structures consumed by PhotoshopAPI.
 using PsApiRasterLayerInfo = std::unordered_map<Enum::ChannelID, std::vector<bpp8_t>>;

@@ -9,12 +9,9 @@
 #include <QImage>
 #include <QUrl>
 #include <vector>
-#include <PhotoshopWriter.h>
-#include <qtToPhotoshopAPI.h>
+#include "TextDepthUnit.h"
 #include <drawable.h>
 
-#include <PhotoshopAPI.h>
-#include <vector>
 #include <unordered_map>
 
 class TextDepth : public QObject

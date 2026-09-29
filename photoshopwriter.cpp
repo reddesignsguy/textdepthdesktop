@@ -1,4 +1,5 @@
 #include "PhotoshopWriter.h"
+#include "qtToPhotoshopAPI.h"
 
 void PhotoshopWriter::write(std::string filename, TextDepthUnits qtData)
 {
