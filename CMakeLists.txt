@@ -25,6 +25,7 @@ qt_add_qml_module(appTextDepthOG
     QML_FILES
         Main.qml
         ActionToolBar.qml
+        LayersPanel.qml
         SOURCES TextDepth.h TextDepth.cpp
         SOURCES TextDepthUnit.h TextDepthUnit.cpp
         SOURCES PhotoshopWriter.h
@@ -68,6 +69,7 @@ if(TEXTDEPTH_BUILD_TESTS)
     enable_testing()
     qt_add_executable(textdepth_psd_loading_test
         tests/psd_loading.cpp
+        LayerUIModel.h LayerUIModel.cpp
         TextDepth.h TextDepth.cpp
         TextDepthUnit.h TextDepthUnit.cpp
         PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
@@ -75,4 +77,25 @@ if(TEXTDEPTH_BUILD_TESTS)
     target_include_directories(textdepth_psd_loading_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(textdepth_psd_loading_test PRIVATE Qt6::Quick PhotoshopAPI)
     add_test(NAME psd_loading COMMAND textdepth_psd_loading_test)
+    qt_add_executable(textdepth_layer_model_test
+        tests/layer_model.cpp LayerUIModel.h LayerUIModel.cpp
+        TextDepth.h TextDepth.cpp PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
+        TextDepthUnit.h TextDepthUnit.cpp
+    )
+    target_include_directories(textdepth_layer_model_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(textdepth_layer_model_test PRIVATE Qt6::Quick PhotoshopAPI)
+    add_test(NAME layer_model COMMAND textdepth_layer_model_test)
+
+    find_package(Qt6 REQUIRED COMPONENTS QuickTest)
+    qt_add_executable(textdepth_layers_panel_test
+        tests/layers_panel_setup.cpp LayerUIModel.h LayerUIModel.cpp
+        TextDepth.h TextDepth.cpp PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
+        TextDepthUnit.h TextDepthUnit.cpp
+    )
+    target_include_directories(textdepth_layers_panel_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(textdepth_layers_panel_test PRIVATE Qt6::QuickTest Qt6::Quick PhotoshopAPI)
+    add_test(NAME layers_panel COMMAND textdepth_layers_panel_test
+        -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/qml -platform offscreen)
+    set_tests_properties(layers_panel PROPERTIES ENVIRONMENT
+        "QT_QUICK_CONTROLS_STYLE=Basic;QT_QUICK_BACKEND=software")
 endif()

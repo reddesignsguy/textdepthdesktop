@@ -101,6 +101,11 @@ public:
     };
 
      std::vector<ScanEdge> buildEdgeTable(const TextDepth::Quad &quad);
+    const TextDepthUnits &units() const { return m_units; }
+    void setUnits(TextDepthUnits units);
+    // Indices use document paint order (back-to-front), independent of any UI.
+    void moveUnit(int from, int to);
+
     Q_INVOKABLE bool loadPsd(const QUrl &fileUrl);
 
     // void paint(QPainter *painter) override;
@@ -125,7 +130,7 @@ signals:
 private:
     int m_width;
     int m_height;
-    TextDepthUnits m_qtData;
+    TextDepthUnits m_units;
 
     struct TextLayerData
     {

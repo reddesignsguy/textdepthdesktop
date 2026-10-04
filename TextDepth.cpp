@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QFile>
 #include <cmath>
+#include <algorithm>
 #include <limits>
 #include <exception>
 #include <filesystem>
@@ -80,35 +81,54 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
         auto nextData = psApiToQt(extracted, m_width, m_height);
 
         // Temp demo: Create the extrusions =================
-        auto &text = nextData[2];
-        const auto &frontPath = text.front.vectorMaskData;
-        const auto center = frontPath.boundingRect().center();
-        QTransform transform;
-        transform.translate(center.x(), center.y());
-        transform.scale(0.8, 0.8);
-        transform.translate(-center.x(), -center.y());
-        transform.translate(0, 130);
-        const auto backPath = frontPath * transform;
-        const QColor hi(133, 67, 14);
-        const QColor lo(77, 24, 0);
-        const auto quads = createFrontAndBackConnection(frontPath, backPath);
-        text.back.baseLayer = createBackLayerBase(quads, hi);
-        text.back.clippedLayers.push_back(createBackLayerShadows(quads, lo, hi));
+        if (nextData.size() > 2) {
+            auto &text = nextData[2];
+            const auto &frontPath = text.front.vectorMaskData;
+            const auto center = frontPath.boundingRect().center();
+            QTransform transform;
+            transform.translate(center.x(), center.y());
+            transform.scale(0.8, 0.8);
+            transform.translate(-center.x(), -center.y());
+            transform.translate(0, 130);
+            const auto backPath = frontPath * transform;
+            const QColor hi(133, 67, 14);
+            const QColor lo(77, 24, 0);
+            const auto quads = createFrontAndBackConnection(frontPath, backPath);
+            text.back.baseLayer = createBackLayerBase(quads, hi);
+            text.back.clippedLayers.push_back(createBackLayerShadows(quads, lo, hi));
+        }
         // Done ===========================
-        m_qtData = std::move(nextData);
+        setUnits(std::move(nextData));
     } catch (const std::exception &error) {
         emit psdLoadFailed(tr("Could not load the PSD: %1").arg(QString::fromUtf8(error.what())));
         return false;
     }
 
-    publishQtData();
     return true;
+}
+
+void TextDepth::setUnits(TextDepthUnits units)
+{
+    m_units = std::move(units);
+    publishQtData();
+}
+
+void TextDepth::moveUnit(int from, int to)
+{
+    const int count = static_cast<int>(m_units.size());
+    if (from < 0 || to < 0 || from >= count || to >= count || from == to)
+        return;
+    if (from < to)
+        std::rotate(m_units.begin() + from, m_units.begin() + from + 1, m_units.begin() + to + 1);
+    else
+        std::rotate(m_units.begin() + to, m_units.begin() + from, m_units.begin() + from + 1);
+    publishQtData();
 }
 
 void TextDepth::publishQtData()
 {
     qDebug() << Q_FUNC_INFO;
-    emit notifyNewQtData(m_qtData);
+    emit notifyNewQtData(m_units);
     qDebug() << "Emitted new qt data";
 }
 

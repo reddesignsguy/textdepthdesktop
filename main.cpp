@@ -12,12 +12,12 @@ int main(int argc, char *argv[])
     qRegisterMetaType<TextDepthUnits>("TextDepthUnits");
 
     QQmlApplicationEngine engine;
-    LayerUIModel layerModel;
     TextDepth backend(1920, 1080); // TODO: Unhardcode me
     TextDepthViewport frontend;
+    LayerUIModel layerModel;
 
     engine.rootContext()->setContextProperty(
-        "layerModel",
+        "documentLayerModel",
         &layerModel);
     engine.rootContext()->setContextProperty(
         "textDepthWidget",
@@ -26,16 +26,16 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("textDepthBackend", &backend);
 
     QObject::connect(
-        &layerModel,
-        &LayerUIModel::addLayerSignal,
-        &backend,
-        &TextDepth::addLayer);
-
-    QObject::connect(
         &backend,
         &TextDepth::notifyNewQtData,
         &frontend,
         &TextDepthViewport::handleNewQtData);
+
+    // Both views independently observe the authoritative document state.
+    QObject::connect(&backend, &TextDepth::notifyNewQtData,
+                     &layerModel, &LayerUIModel::setUnits);
+    QObject::connect(&layerModel, &LayerUIModel::moveRequested,
+                     &backend, &TextDepth::moveUnit);
 
     QObject::connect(
         &engine,
