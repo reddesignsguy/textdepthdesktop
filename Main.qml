@@ -1,14 +1,56 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import TextDepthOG
+import QtQuick.Dialogs
 
 Window {
+    id: mainWindow
     width: 1920
     height: 1080
     visible: true
     title: qsTr("TextDepth Demo")
     color: "#212121"
+
+    Action {
+        id: openPsdAction
+        text: qsTr("Open PSD…")
+        shortcut: StandardKey.Open
+        onTriggered: psdFileDialog.open()
+    }
+
+    Action {
+        id: exportPsdAction
+        text: qsTr("Export to PSD")
+        onTriggered: textDepthBackend.writeToPhotoshop()
+    }
+
+    FileDialog {
+        id: psdFileDialog
+        title: qsTr("Open PSD")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("Photoshop documents (*.psd)")]
+        onAccepted: textDepthBackend.loadPsd(selectedFile)
+    }
+
+    MessageDialog {
+        id: loadErrorDialog
+        title: qsTr("Unable to open PSD")
+        buttons: MessageDialog.Ok
+    }
+
+    Connections {
+        target: textDepthBackend
+        function onUnitEditFailed(message) {
+            loadErrorDialog.title = qsTr("Unable to update unit")
+            loadErrorDialog.text = message
+            loadErrorDialog.open()
+        }
+        function onPsdLoadFailed(message) {
+            loadErrorDialog.title = qsTr("Unable to open PSD")
+            loadErrorDialog.text = message
+            loadErrorDialog.open()
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -32,16 +74,9 @@ Window {
                     font.pixelSize: 14
                     font.bold: true
                 }
-                Button {
-                    id: tmp_Save
-                    width: 50
-                    font.pixelSize: 16
-                    text: "Export to PSD"
-
-                    onClicked: {
-                         textDepthWidget.writeToPhotoshop();
-                    }
-
+                ActionToolBar {
+                    Layout.fillWidth: true
+                    actions: [openPsdAction, exportPsdAction]
                 }
                 TextField {
                     id: textInput
@@ -50,7 +85,7 @@ Window {
                     text: "o"
                     font.pixelSize: 16
                     onTextChanged: {
-                        textDepthWidget.text = text
+                        textDepthBackend.text = text
                     }
                 }
 
@@ -61,6 +96,7 @@ Window {
             Layout.fillHeight: true
             Rectangle {
                 id: viewport
+                objectName: "documentViewport"
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -93,18 +129,25 @@ Window {
                     id: document
                     // Todo: allow user to choose canvas size
                     // https://github.com/reddesignsguy/textdepthdesktop/issues/3
-                    width: 2000
-                    height: 2000
+                    width: 1920
+                    height: 1080
 
                     color: "white"
                     border.color: "#808080"
                     border.width: 1
 
-                    TextDepth {
-                    id: textDepthWidget
+                    Item {
+                        id: textDepthViewportHost
+                        anchors.fill: parent
 
-                    anchors.fill: parent
-                    text: textInput.text
+                        Component.onCompleted: {
+                            textDepthWidget.parent = textDepthViewportHost
+                            textDepthWidget.width = width
+                            textDepthWidget.height = height
+                        }
+
+                        onWidthChanged: textDepthWidget.width = width
+                        onHeightChanged: textDepthWidget.height = height
                     }
                 }
                 }
@@ -228,137 +271,26 @@ Window {
                 }
                 }
             }
-            Rectangle {
-                id: root
-                color: "#2B2B2B"
-                Layout.preferredWidth: 300
+            ColumnLayout {
+                objectName: "editorSidebar"
+                // Layouts expand by default. Bound the sidebar so the viewport
+                // receives the remaining width, including in smaller windows.
+                Layout.fillWidth: false
+                Layout.preferredWidth: Math.min(300, mainWindow.width * 0.4)
+                Layout.minimumWidth: Layout.preferredWidth
+                Layout.maximumWidth: Layout.preferredWidth
                 Layout.fillHeight: true
-                property int selectedLayer: -1
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 36
-                        color: "#353535"
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Layers"
-                            color: "white"
-                            font.bold: true
-                        }
-                    }
-
-                    ListView {
-                        id: layerView
-
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        model: layerModel
-                        clip: true
-
-                        delegate: Rectangle {
-
-                            required property string layerName
-                            required property bool layerVisible
-                            required property int index
-
-                            width: layerView.width
-                            height: 40
-
-                            color: root.selectedLayer === index
-                                   ? "#4A6EA8"
-                                   : "#3A3A3A"
-
-                            border.color: "#555"
-                            MouseArea {
-                                anchors.fill: parent
-
-                                onClicked: {
-                                    root.selectedLayer = index
-                                }
-                            }
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 8
-
-                                CheckBox {
-                                    checked: layerVisible
-
-                                    onToggled: {
-                                        layerModel.setData(
-                                            layerModel.index(index, 0),
-                                            checked,
-                                            258 // VisibleRole
-                                        )
-                                    }
-                                }
-
-                                Rectangle {
-                                    width: 28
-                                    height: 28
-                                    color: "#777"
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "🖼"
-                                    }
-                                }
-
-                                Text {
-                                    text: layerName
-                                    color: "white"
-
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                            }
-                            Component.onCompleted: {
-                                console.log("delegate created", layerName)
-                                console.log("model =", layerModel)
-                                console.log("rowCount =", layerModel.rowCount())
-
-                            }
-                        }
-                    }
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 40
-
-                        color: "#353535"
-
-                        RowLayout {
-                            anchors.fill: parent
-
-                            Button {
-                                text: "+"
-
-                                onClicked: {
-                                    layerModel.addLayer("New Layer")
-                                    console.log("detected click for adding new layer")
-                                }
-                            }
-
-                            Button {
-                                text: "-"
-
-                                enabled: root.selectedLayer >= 0
-
-                                onClicked: {
-                                    layerModel.removeLayer(root.selectedLayer)
-                                }
-                            }
-                        }
-                    }
+                spacing: 8
+                LayersPanel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    layerModel: documentLayerModel
+                }
+                UnitPropertiesPanel {
+                    Layout.fillWidth: true
+                    propertiesModel: unitPropertiesModel
                 }
             }
         }
-
     }
 }

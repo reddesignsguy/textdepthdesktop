@@ -1,0 +1,63 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+      "major": 3,
+      "minor": 25,
+      "patch": 0
+    },
+  
+    "configurePresets": [
+  
+      {
+        "name": "base",
+        "hidden": true,
+        "generator": "Ninja",
+        "binaryDir": "${sourceDir}/build/${presetName}",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Debug"
+        }
+      },
+  
+      {
+        "name": "qt-macos",
+        "displayName": "Qt (macOS)",
+        "description": "Uses Qt-bundled CMake and Clang kit on macOS",
+        "inherits": "base",
+        "cacheVariables": {
+          "CMAKE_PREFIX_PATH": "$env{HOME}/Qt/6.7.0/macos",
+          "CMAKE_C_COMPILER":   "/usr/bin/clang",
+          "CMAKE_CXX_COMPILER": "/usr/bin/clang++"
+        },
+        "environment": {
+          "PATH": "$env{HOME}/Qt/Tools/CMake_64/bin:$env{PATH}"
+        }
+      },
+  
+      {
+        "name": "qt-macos-release",
+        "displayName": "Qt (macOS, Release)",
+        "inherits": "qt-macos",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release"
+        }
+      }
+  
+    ],
+  
+    "buildPresets": [
+  
+      {
+        "name": "build-macos-debug",
+        "displayName": "Build macOS Debug",
+        "configurePreset": "qt-macos",
+        "configuration": "Debug"
+      },
+      {
+        "name": "build-macos-release",
+        "displayName": "Build macOS Release",
+        "configurePreset": "qt-macos-release",
+        "configuration": "Release"
+      }
+  
+    ]
+  }

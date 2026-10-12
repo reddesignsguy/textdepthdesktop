@@ -2,10 +2,8 @@
 #define PHOTOSHOPWRITER_H
 
 #include <QQmlEngine>
-#include <PhotoshopAPI.h>
-#include <QPointF>
-#include <QPainterPath>
-#include <qtToPhotoshopAPI.h>
+#include "TextDepthUnit.h"
+#include <string>
 
 class PhotoshopWriter : public QObject
 {
@@ -14,7 +12,7 @@ class PhotoshopWriter : public QObject
 public:
 
     PhotoshopWriter(QObject *parent = 0) : QObject(parent){};
-    void write(std::string filename, QtData data);
+    void write(std::string filename, const RenderedTextDepthUnits &data);
 };
 
 #endif // PHOTOSHOPWRITER_H

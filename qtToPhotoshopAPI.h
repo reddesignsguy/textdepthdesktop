@@ -1,49 +1,42 @@
 #ifndef QTTOPHOTOSHOPAPI_H
 #define QTTOPHOTOSHOPAPI_H
 
-#include <QPainterPath>
-#include <QImage>
+#include "TextDepthUnit.h"
+#include <unordered_map>
 #include <vector>
 #include <PhotoshopAPI.h>
 
 using namespace NAMESPACE_PSAPI;
 
-///////////// 1. These 3 templates are used as a base for the qt and psApi variants of our text data. /////////////
-///////////// There is some code duplication in the first 2 templates, but I don't think it's egregious /////////////
-template <typename RASTER>
-struct BackTextData {
-    RASTER baseLayer;
-    std::vector<RASTER> clippedLayers;
-};
-
-template <typename VECTOR, typename RASTER>
-struct FrontTextData {
-    VECTOR vectorMaskData;
-    RASTER baseLayer;
-    std::vector<RASTER> clippedLayers;
-};
-
-template <typename VECTOR, typename RASTER>
-struct TextData {
-    FrontTextData<VECTOR, RASTER> front;
-    BackTextData<RASTER> back;
-};
-
-///////////// 2. structures prepared by QT application /////////////
-using QtBackTextData = BackTextData<QImage>;
-using QtFrontTextData = FrontTextData<std::vector<std::vector<QPainterPath::Element>>, QImage>;
-using QtTextData = TextData<std::vector<std::vector<QPainterPath::Element>>, QImage>;
-using QtData = std::vector<QtTextData>;
-
-///////////// 3. structures consumed by PhotoshopAPI /////////////
+// Structures consumed by PhotoshopAPI.
 using PsApiRasterLayerInfo = std::unordered_map<Enum::ChannelID, std::vector<bpp8_t>>;
 using PsApiVectorMask = Layer<bpp8_t>::VectorMask;
-using PsApiBackTextData = BackTextData<PsApiRasterLayerInfo>;
-using PsApiFrontTextData = FrontTextData<PsApiVectorMask, PsApiRasterLayerInfo>;
-using PsApiTextData = TextData<PsApiVectorMask, PsApiRasterLayerInfo>;
-using PsApiData = std::vector<PsApiTextData>;
 
-///////////// 4. the bridge between our text in QT to PhotoshopAPI! /////////////
-PsApiData qtToPsApi (QtData qtInfo);
+struct PsApiBackTextData {
+    PsApiRasterLayerInfo baseLayer;
+    std::vector<PsApiRasterLayerInfo> clippedLayers;
+};
+
+struct PsApiFrontTextData {
+    PsApiVectorMask vectorMaskData;
+    PsApiRasterLayerInfo baseLayer;
+    std::vector<PsApiRasterLayerInfo> clippedLayers;
+};
+
+struct PsApiTextData {
+    PsApiFrontTextData front;
+    PsApiBackTextData back;
+};
+
+using PsApiLayersDto = std::vector<PsApiTextData>;
+
+// Convert Qt text data to PhotoshopAPI text data.
+PsApiLayersDto qtToPsApi(const RenderedTextDepthUnits &units);
+
+// Convert bridge data back to Qt, using the same dimensions for all raster layers.
+// Empty channel maps produce null images. Nonempty maps require RGB channels;
+// alpha is optional (defaults to opaque). Invalid dimensions/channel sizes throw
+// std::invalid_argument. Vector paths use qtToPsApi's per-endpoint handle encoding.
+RenderedTextDepthUnits psApiToQt(const PsApiLayersDto& psInfo, int width, int height);
 
 #endif // QTTOPHOTOSHOPAPI_H
