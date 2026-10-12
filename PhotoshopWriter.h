@@ -12,7 +12,7 @@ class PhotoshopWriter : public QObject
 public:
 
     PhotoshopWriter(QObject *parent = 0) : QObject(parent){};
-    void write(std::string filename, TextDepthUnits data);
+    void write(std::string filename, const RenderedTextDepthUnits &data);
 };
 
 #endif // PHOTOSHOPWRITER_H

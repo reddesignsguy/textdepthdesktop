@@ -4,17 +4,19 @@
 #include <TextDepth.h>
 #include "TextDepthUnit.h"
 #include "LayerUIModel.h"
+#include "UnitPropertiesModel.h"
 #include <TextDepthViewport.h>
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
-    qRegisterMetaType<TextDepthUnits>("TextDepthUnits");
+    qRegisterMetaType<RenderedTextDepthUnits>("RenderedTextDepthUnits");
 
     QQmlApplicationEngine engine;
     TextDepth backend(1920, 1080); // TODO: Unhardcode me
     TextDepthViewport frontend;
     LayerUIModel layerModel;
+    UnitPropertiesModel unitProperties;
 
     engine.rootContext()->setContextProperty(
         "documentLayerModel",
@@ -36,6 +38,15 @@ int main(int argc, char *argv[])
                      &layerModel, &LayerUIModel::setUnits);
     QObject::connect(&layerModel, &LayerUIModel::moveRequested,
                      &backend, &TextDepth::moveUnit);
+
+    engine.rootContext()->setContextProperty("unitPropertiesModel", &unitProperties);
+    QObject::connect(&backend, &TextDepth::notifyNewQtData,
+                     &unitProperties, &UnitPropertiesModel::setUnits);
+    QObject::connect(&layerModel, &LayerUIModel::selectedRowChanged, &unitProperties, [&] {
+        unitProperties.selectUnit(layerModel.selectedUnitId());
+    });
+    QObject::connect(&unitProperties, &UnitPropertiesModel::toggleBackRequested,
+                     &backend, &TextDepth::handleToggleUnitVisibility);
 
     QObject::connect(
         &engine,

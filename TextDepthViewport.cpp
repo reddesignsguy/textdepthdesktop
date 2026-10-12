@@ -37,202 +37,39 @@ void TextDepthViewport::drawLayers(std::vector<TextDrawable> layers) {
     update();
 }
 
-void TextDepthViewport::handleNewQtData(const TextDepthUnits &qData)
+namespace {
+QImage compositeLayers(const QImage &base, const std::vector<QImage> &clips)
 {
-    qDebug() << Q_FUNC_INFO;
+    if (base.isNull()) return {};
+    QImage image = base.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QPainter painter(&image);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceAtop);
+    for (const auto &clip : clips)
+        painter.drawImage(0, 0, clip);
+    return image;
+}
+}
+
+void TextDepthViewport::handleNewQtData(const RenderedTextDepthUnits &units)
+{
     m_thingsToDraw.clear();
-    std::cout<< "handle new qt data!" << std::endl;
-    qDebug() << "Albany says hi";
-
-    for (const TextDepthUnit &textData : qData) {
-        auto textDrawable = std::make_unique<TextDrawable>();
-
-        const auto addImage = [&textDrawable](const QImage &image) {
-            if (!image.isNull()) {
-                ImageDrawable drawable;
-                drawable.image = image;
-                drawable.point = QPointF(0, 0);
-                textDrawable->backTextLayers.push_back(std::move(drawable));
-            }
-        };
-        addImage(textData.back.baseLayer);
-        for (const QImage &image : textData.back.clippedLayers) {
-            addImage(image);
+    // Snapshots are in paint order: draw the entire lower unit before the next.
+    for (const auto &unit : units) {
+        auto drawable = std::make_unique<TextDrawable>();
+        if (unit.back) {
+            ImageDrawable back;
+            back.image = compositeLayers(unit.back->baseLayer, unit.back->clippedLayers);
+            drawable->backTextLayers.push_back(std::move(back));
         }
-
-        //QPainterPath path;
-        //for (const auto &subPath : textData.front.vectorMaskData) {
-
-        //    std::pair<double, double> leavingControlPointOfLastPoint;
-        //    for (std::size_t index = 0; index < subPath.size(); ++index) {
-        //        const QPainterPath::Element &element = subPath[index];
-        //        if (element.type == QPainterPath::MoveToElement) {
-        //            path.moveTo(element.x, element.y);
-        //            leavingControlPointOfLastPoint.first = element.x;
-        //            leavingControlPointOfLastPoint.second = element.y;
-        //        } else if (element.type == QPainterPath::LineToElement) {
-        //            qDebug() << "Normal element:" << element.x << element.y ;
-        //            path.lineTo(element.x, element.y);
-        //            leavingControlPointOfLastPoint.first = element.x;
-        //            leavingControlPointOfLastPoint.second = element.y;
-        //        } else if (element.type == QPainterPath::CurveToElement &&
-        //                   index + 2 < subPath.size()) {
-
-        //            qDebug() << "Curve to element!!!";
-        //            const auto secondPt= subPath[index + 1];
-        //            const auto endPoint = subPath[index + 2];
-        //            if (secondPt.type == QPainterPath::CurveToDataElement &&
-        //                endPoint.type == QPainterPath::CurveToDataElement) {
-        //                qDebug() << "Curve to data element!!!";
-        //                qDebug() << "Element:" << element.x << element.y << "| secondPt:" << secondPt.x << secondPt.y << "| End:" << endPoint.x << endPoint.y;
-
-        //                path.cubicTo(element.x, element.y,
-        //                             element.x, element.y,
-        //                             endPoint.x, endPoint.y);
-        //                //path.cubicTo(control2.x, control2.y,
-        //                //             element.x, element.y,
-        //                //             endPoint.x, endPoint.y);
-        //                index += 2;
-        //                if (element.x == 989 && element.y == 496) {
-        //                    //qDebug() << "Breaking at investigation point!";
-        //                    //break;
-        //                } else if (endPoint.x == 933 && endPoint.y == 445) {
-        //                    qDebug() << "Breaking at investigation point!";
-        //                    break;
-
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
-
-        textDrawable->frontText.path = textData.front.vectorMaskData;
-
-        // ew!
-        ImageDrawable baseDrawable;
-        baseDrawable.image = textData.front.baseLayer;
-        baseDrawable.point = QPointF(0, 0);
-
-        textDrawable->frontTextBase = baseDrawable;
-        m_thingsToDraw.push_back(std::move(textDrawable));
+        drawable->frontText.path = unit.front.vectorMaskData;
+        drawable->frontTextBase.image = compositeLayers(unit.front.baseLayer, unit.front.clippedLayers);
+        m_thingsToDraw.push_back(std::move(drawable));
     }
-
     update();
 }
 
 void TextDepthViewport::paint(QPainter *painter)
 {
-
-    // Go through its buffer of layers and draw them
-    for (auto& drawable : m_thingsToDraw) {
+    for (auto &drawable : m_thingsToDraw)
         drawable->draw(painter);
-    }
-
-//    qDebug() << m_layers.size();
-//    for (auto & layer : m_layers) {
-//        QPainterPath textPath = QPainterPath();
-//
-//        if (layer.m_text.isEmpty()) {
-//            return;
-//        }
-//
-//        QFont font;
-//        font.setPixelSize(layer.m_textSize);
-//        font.setBold(true);
-//
-//        // Calculate text position to center it
-//        QFontMetrics metrics(font);
-//        auto & m_text = layer.m_text;
-//        QRect textRect = metrics.boundingRect(m_text);
-//        auto & m_textX = layer.m_textX;
-//        auto & m_textY = layer.m_textY;
-//        auto & m_textSize = layer.m_textSize;
-//
-//        m_textX = (width() - textRect.width()) / 2.0 - textRect.x();
-//        m_textY = (height() + textRect.height()) / 2.0;
-//        textPath.addText(m_textX, m_textY, font, m_text);
-//
-//        // Set fill rule to WindingFill to properly fill holes in letters like 'e', 'o', 'a'
-//        textPath.setFillRule(Qt::WindingFill);
-//
-//        // painter->scale(m_zoom, m_zoom);
-//        painter->setRenderHint(QPainter::Antialiasing);
-//
-//        // Draw background
-//        painter->fillRect(0, 0, width(), height(), QColor(240, 240, 240));
-//
-//
-//        // LAYER 1: Draw smaller duplicate text first (bottom layer)
-//        painter->setPen(Qt::NoPen);
-//
-//        painter->setBrush(QColor(40, 96, 160));
-//
-//        auto & m_coreShadowLoColor =  layer.m_coreShadowLoColor;
-//        auto & m_coreShadowHiColor =  layer.m_coreShadowHiColor;
-//        auto & m_rasterCoreShadowHi = layer.m_rasterCoreShadowHi;
-//        auto & m_rasterCoreShadowLo = layer.m_rasterCoreShadowLo;
-//        auto & m_rasterAtmosphere = layer.m_rasterAtmosphere;
-//
-//        // LAYER 2: Draw pure raster data (middle layer)
-//        if (!m_rasterCoreShadowHi.isNull()) {
-//            qreal rasterX = (width() - m_rasterCoreShadowHi.width()) / 2.0;
-//            qreal rasterY = (height() - m_rasterCoreShadowHi.height()) / 2.0;
-//            painter->drawImage(QPointF(rasterX, rasterY),  m_rasterCoreShadowHi);
-//        }
-//        if (!m_rasterCoreShadowLo.isNull()) {
-//            qreal rasterX = (width() - m_rasterCoreShadowLo.width()) / 2.0;
-//            qreal rasterY = (height() - m_rasterCoreShadowLo.height()) / 2.0;
-//            painter->drawImage(QPointF(rasterX, rasterY),  m_rasterCoreShadowLo);
-//        }
-//        if (!m_rasterAtmosphere.isNull()) {
-//            qreal rasterX = (width() - m_rasterAtmosphere.width()) / 2.0;
-//            qreal rasterY = (height() - m_rasterAtmosphere.height()) / 2.0;
-//            painter->drawImage(QPointF(rasterX, rasterY),  m_rasterAtmosphere);
-//        }
-//
-//        // LAYER 3: Draw main text on top (top layer)
-//        QLinearGradient gradient(0, textPath.boundingRect().bottom(), 0, textPath.boundingRect().top());
-//        gradient.setColorAt(0.0, Qt::blue);
-//        gradient.setColorAt(1.0, Qt::cyan);
-//
-//        auto & m_textPath = layer.m_textPath;
-//        painter->setBrush(gradient);
-//        painter->drawPath(m_textPath);
-//    }
-//    // DEBUG: DRAW POINTS
-//    // {
-//    //      painter->setPen(Qt::NoPen);
-//    //     painter->setBrush(QColor(255,0,0, 255));
-//    //      qreal radius = 1.0;
-//    //     for (auto& letter : tmp_points)
-//    //     {
-//    //         for (auto& pt : letter)
-//    //         {
-//    //             painter->drawEllipse(pt, radius, radius);
-//    //         }
-//    //     }
-//    // }
-//
-//    // LAYER 4: Draw vanishing point as a visible dot
-//    // if (!m_vanishingPoint.isNull() && m_vanishingPoint.x() != 0 && m_vanishingPoint.y() != 0) {
-//    //     // Draw a bright red dot for the vanishing point
-//    //     painter->setPen(Qt::NoPen);
-//    //     painter->setBrush(QColor(255, 0, 0, 255)); // Bright red
-//
-//    //     // Draw a circle with radius 8 pixels
-//    //     qreal radius = 8.0;
-//    //     painter->drawEllipse(m_vanishingPoint, radius, radius);
-//
-//    //     // Draw a white outline for better visibility
-//    //     painter->setPen(QPen(QColor(255, 255, 255, 255), 2));
-//    //     painter->setBrush(Qt::NoBrush);
-//    //     painter->drawEllipse(m_vanishingPoint, radius, radius);
-//
-//    //     qDebug() << "Drawing vanishing point at:" << m_vanishingPoint;
-//    // }
-//
-//    // painter->drawLines(QList<QLineF>{
-//    //     QLineF(tmp1, tmp2),
-//    //     QLineF(tmp3, tmp4)
-//    // });
 }

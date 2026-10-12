@@ -29,6 +29,7 @@ qt_add_qml_module(appTextDepthOG
         UnitPropertiesPanel.qml
         SOURCES UnitPropertiesModel.h UnitPropertiesModel.cpp
         SOURCES TextDepth.h TextDepth.cpp
+        SOURCES BackGeneration.h BackGeneration.cpp
         SOURCES TextDepthUnit.h TextDepthUnit.cpp
         SOURCES PhotoshopWriter.h
         SOURCES photoshopwriter.h photoshopwriter.cpp
@@ -72,6 +73,7 @@ if(TEXTDEPTH_BUILD_TESTS)
     qt_add_executable(textdepth_psd_loading_test
         tests/psd_loading.cpp
         LayerUIModel.h LayerUIModel.cpp
+        BackGeneration.h BackGeneration.cpp
         TextDepth.h TextDepth.cpp
         TextDepthUnit.h TextDepthUnit.cpp
         PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
@@ -81,18 +83,22 @@ if(TEXTDEPTH_BUILD_TESTS)
     add_test(NAME psd_loading COMMAND textdepth_psd_loading_test)
     qt_add_executable(textdepth_layer_model_test
         tests/layer_model.cpp LayerUIModel.h LayerUIModel.cpp
+        TextDepthViewport.h TextDepthViewport.cpp
         UnitPropertiesModel.h UnitPropertiesModel.cpp
+        BackGeneration.h BackGeneration.cpp
         TextDepth.h TextDepth.cpp PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
         TextDepthUnit.h TextDepthUnit.cpp
     )
     target_include_directories(textdepth_layer_model_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(textdepth_layer_model_test PRIVATE Qt6::Quick PhotoshopAPI)
-    add_test(NAME layer_model COMMAND textdepth_layer_model_test)
+    add_test(NAME layer_model COMMAND textdepth_layer_model_test -platform offscreen)
+    set_tests_properties(layer_model PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Basic;QT_QUICK_BACKEND=software")
 
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)
     qt_add_executable(textdepth_layers_panel_test
         tests/layers_panel_setup.cpp LayerUIModel.h LayerUIModel.cpp
         UnitPropertiesModel.h UnitPropertiesModel.cpp
+        BackGeneration.h BackGeneration.cpp
         TextDepth.h TextDepth.cpp PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
         TextDepthUnit.h TextDepthUnit.cpp
     )

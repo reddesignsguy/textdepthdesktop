@@ -21,7 +21,7 @@ public:
 
     QUuid selectedUnitId() const;
     int selectedRow() const { return m_selectedRow; }
-    void setUnits(const TextDepthUnits &units);
+    void setUnits(const RenderedTextDepthUnits &units);
 
     Q_INVOKABLE void selectLayer(int row);
     // Requests a move; rows change only when a backend snapshot arrives.

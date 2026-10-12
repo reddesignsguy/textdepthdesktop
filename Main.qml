@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
-import TextDepthOG
 
 Window {
+    id: mainWindow
     width: 1920
     height: 1080
     visible: true
@@ -40,7 +40,13 @@ Window {
 
     Connections {
         target: textDepthBackend
+        function onUnitEditFailed(message) {
+            loadErrorDialog.title = qsTr("Unable to update unit")
+            loadErrorDialog.text = message
+            loadErrorDialog.open()
+        }
         function onPsdLoadFailed(message) {
+            loadErrorDialog.title = qsTr("Unable to open PSD")
             loadErrorDialog.text = message
             loadErrorDialog.open()
         }
@@ -90,6 +96,7 @@ Window {
             Layout.fillHeight: true
             Rectangle {
                 id: viewport
+                objectName: "documentViewport"
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -264,10 +271,25 @@ Window {
                 }
                 }
             }
-            LayersPanel {
-                Layout.preferredWidth: 300
+            ColumnLayout {
+                objectName: "editorSidebar"
+                // Layouts expand by default. Bound the sidebar so the viewport
+                // receives the remaining width, including in smaller windows.
+                Layout.fillWidth: false
+                Layout.preferredWidth: Math.min(300, mainWindow.width * 0.4)
+                Layout.minimumWidth: Layout.preferredWidth
+                Layout.maximumWidth: Layout.preferredWidth
                 Layout.fillHeight: true
-                layerModel: documentLayerModel
+                spacing: 8
+                LayersPanel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    layerModel: documentLayerModel
+                }
+                UnitPropertiesPanel {
+                    Layout.fillWidth: true
+                    propertiesModel: unitPropertiesModel
+                }
             }
         }
     }

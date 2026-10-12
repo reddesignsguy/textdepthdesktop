@@ -33,7 +33,7 @@ QUuid LayerUIModel::selectedUnitId() const
     return isValidRow(m_selectedRow) ? m_rows[m_selectedRow].unitId : QUuid{};
 }
 
-void LayerUIModel::setUnits(const TextDepthUnits &units)
+void LayerUIModel::setUnits(const RenderedTextDepthUnits &units)
 {
     const QUuid selection = selectedUnitId();
     const int previousSelection = m_selectedRow;

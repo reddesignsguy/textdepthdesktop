@@ -41,7 +41,7 @@ signals:
 
 public slots:
     void drawLayers(std::vector<TextDrawable> texts);
-    void handleNewQtData(const TextDepthUnits &qData);
+    void handleNewQtData(const RenderedTextDepthUnits &qData);
 
 private:
     std::vector<std::unique_ptr<Drawable>> m_thingsToDraw;

@@ -37,13 +37,15 @@ struct TextDrawable : public Drawable {
 
     std::vector<ImageDrawable> backTextLayers;
     void draw(QPainter* painter) override {
+        painter->save();
         for (auto & backLayer : backTextLayers) {
             backLayer.draw(painter);
         }
-        painter->setClipPath(frontText.path);
+        if (!frontText.path.isEmpty())
+            painter->setClipPath(frontText.path, Qt::IntersectClip);
         frontTextBase.draw(painter);
 
-        painter->setClipping(false);
+        painter->restore();
         // frontText.draw(painter);
     }
 };

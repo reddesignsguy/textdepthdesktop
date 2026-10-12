@@ -31,12 +31,12 @@ struct PsApiTextData {
 using PsApiLayersDto = std::vector<PsApiTextData>;
 
 // Convert Qt text data to PhotoshopAPI text data.
-PsApiLayersDto qtToPsApi (TextDepthUnits qtInfo);
+PsApiLayersDto qtToPsApi(const RenderedTextDepthUnits &units);
 
 // Convert bridge data back to Qt, using the same dimensions for all raster layers.
 // Empty channel maps produce null images. Nonempty maps require RGB channels;
 // alpha is optional (defaults to opaque). Invalid dimensions/channel sizes throw
 // std::invalid_argument. Vector paths use qtToPsApi's per-endpoint handle encoding.
-TextDepthUnits psApiToQt(const PsApiLayersDto& psInfo, int width, int height);
+RenderedTextDepthUnits psApiToQt(const PsApiLayersDto& psInfo, int width, int height);
 
 #endif // QTTOPHOTOSHOPAPI_H

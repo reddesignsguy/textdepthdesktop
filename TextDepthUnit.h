@@ -8,7 +8,6 @@
 #include <vector>
 #include <optional>
 
-// Application domain model, independent of PhotoshopAPI.
 struct Back {
     QImage baseLayer;
     std::vector<QImage> clippedLayers;
@@ -20,23 +19,27 @@ struct Front {
     std::vector<QImage> clippedLayers;
 };
 
-class TextDepthUnit {
-    // Stable identity across document snapshots and reordering.
+// Immutable snapshot for views and export. A hidden back is omitted, even when
+// the backend has cached it. Identity and availability support editor controls.
+struct RenderedTextDepthUnit {
+    const QUuid id;
+    const Front front;
+    const std::optional<Back> back;
+    const bool backAvailable = false;
+};
+
+// Mutable document state owned by the backend.
+struct TextDepthUnit {
     QUuid id = QUuid::createUuid();
-
-    // Final calculated data for drawing on viewport and exporting to PSD
     Front front;
-    Back back;
-
-    // Pre-rendering data
-    QPointF back2FrontRelativePos;
-    QPointF back2FrontRelativeSize;
-
-    // Misc
-    bool backVisible;
+    std::optional<Back> back;
+    QPointF back2FrontRelativePos{0, 130};
+    QPointF back2FrontRelativeSize{0.8, 0.8};
+    bool backVisible = false;
 };
 
 using TextDepthUnits = std::vector<TextDepthUnit>;
-Q_DECLARE_METATYPE(TextDepthUnits)
+using RenderedTextDepthUnits = std::vector<RenderedTextDepthUnit>;
+Q_DECLARE_METATYPE(RenderedTextDepthUnits)
 
 #endif // TEXTDEPTHUNIT_H

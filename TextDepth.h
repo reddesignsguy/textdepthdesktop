@@ -105,6 +105,8 @@ public:
     void setUnits(TextDepthUnits units);
     // Indices use document paint order (back-to-front), independent of any UI.
     void moveUnit(int from, int to);
+    bool handleToggleUnitVisibility(const QUuid &id);
+    RenderedTextDepthUnits renderedUnits() const;
 
     Q_INVOKABLE bool loadPsd(const QUrl &fileUrl);
 
@@ -122,10 +124,11 @@ public slots:
     Q_INVOKABLE void writeToPhotoshop();
 
 signals:
+    void unitEditFailed(const QString &message);
     void psdLoadFailed(const QString &message);
     void textChanged(); // probs dont need dis
     void layersChanged(std::vector<TextDrawable> texts);
-    void notifyNewQtData(const TextDepthUnits &qData);
+    void notifyNewQtData(const RenderedTextDepthUnits &qData);
 
 private:
     int m_width;
@@ -168,27 +171,17 @@ private:
 
     std::vector<Quad> getVisibleQuadsOptimized(const std::vector<Quad> &quads, const std::shared_ptr<IPolygon> frontPolygon);
     void updateTextPath();
-    std::vector<Quad> createFrontAndBackConnection(QPainterPath front, QPainterPath back);
-    QPointF deCasteljau(const QPointF &p0, const QPointF &p1, const QPointF &p2, const QPointF &p3, qreal t);
     void renderQuads(const std::vector<Quad> quads, TextLayerData &data);
 
-    // Helper methods for 3D depth effect
-
     void printIntervalsState(std::unordered_map<int, std::vector<TextDepth::Interval>> intervalState);
-
-    // Returns an non-bezier approximation of a beizier-point-containing QPainterPath
-    std::vector<std::vector<QPointF>> getNonBezierPath(const QPainterPath &path, int samplesPerCurve);
 
     // Returns a subpath-organized representation of a QPatherPath
     std::vector<std::vector<QPainterPath::Element>> getOrganizedPath(const QPainterPath &inputPath);
 
     const void setRasterQuadData(Quad &quad, QColor &color);
     // QColor calculateColorFromAngle(const QPointF& p1, const QPointF& p2); // DEPRECATED
-    int calculateCoreShadowLoOpacityFromAngle(const QPointF &p1, const QPointF &p2);
 
     // Vanishing point calculation
-    QPointF calculateVanishingPoint(const std::vector<std::vector<QPointF>> &frontSubpaths,
-                                    const std::vector<std::vector<QPointF>> &backSubpaths);
     QPointF lineIntersection(const QPointF &p1, const QPointF &p2, const QPointF &p3, const QPointF &p4);
 
     // QString m_text;
@@ -212,8 +205,6 @@ private:
     //{
     //}
 
-    QImage createBackLayerBase(const std::vector<Quad> quads, const QColor & color);
-    QImage createBackLayerShadows(const std::vector<Quad> quads, const QColor & darkestColor, const QColor & lightestColor);
 
     //QPointF m_vanishingPoint;
 
