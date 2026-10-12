@@ -20,14 +20,20 @@ struct Front {
     std::vector<QImage> clippedLayers;
 };
 
-struct TextDepthUnit {
+class TextDepthUnit {
     // Stable identity across document snapshots and reordering.
     QUuid id = QUuid::createUuid();
+
+    // Final calculated data for drawing on viewport and exporting to PSD
     Front front;
     Back back;
-    // Retain imported back layers while the generated 3D effect is enabled.
-    std::optional<Back> backBefore3D;
-    bool is3D() const { return backBefore3D.has_value(); }
+
+    // Pre-rendering data
+    QPointF back2FrontRelativePos;
+    QPointF back2FrontRelativeSize;
+
+    // Misc
+    bool backVisible;
 };
 
 using TextDepthUnits = std::vector<TextDepthUnit>;
