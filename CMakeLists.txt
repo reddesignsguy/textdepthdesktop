@@ -26,6 +26,8 @@ qt_add_qml_module(appTextDepthOG
         Main.qml
         ActionToolBar.qml
         LayersPanel.qml
+        UnitPropertiesPanel.qml
+        SOURCES UnitPropertiesModel.h UnitPropertiesModel.cpp
         SOURCES TextDepth.h TextDepth.cpp
         SOURCES TextDepthUnit.h TextDepthUnit.cpp
         SOURCES PhotoshopWriter.h
@@ -79,6 +81,7 @@ if(TEXTDEPTH_BUILD_TESTS)
     add_test(NAME psd_loading COMMAND textdepth_psd_loading_test)
     qt_add_executable(textdepth_layer_model_test
         tests/layer_model.cpp LayerUIModel.h LayerUIModel.cpp
+        UnitPropertiesModel.h UnitPropertiesModel.cpp
         TextDepth.h TextDepth.cpp PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
         TextDepthUnit.h TextDepthUnit.cpp
     )
@@ -89,6 +92,7 @@ if(TEXTDEPTH_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)
     qt_add_executable(textdepth_layers_panel_test
         tests/layers_panel_setup.cpp LayerUIModel.h LayerUIModel.cpp
+        UnitPropertiesModel.h UnitPropertiesModel.cpp
         TextDepth.h TextDepth.cpp PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
         TextDepthUnit.h TextDepthUnit.cpp
     )
