@@ -24,3 +24,7 @@ CMakeLists.txt.user.*
 .DS_Store
 
 tmp
+.cache
+builds
+.vscode
+.qmlls.ini
