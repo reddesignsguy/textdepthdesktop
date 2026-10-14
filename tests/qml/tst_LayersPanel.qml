@@ -7,7 +7,7 @@ TestCase {
     width: 400
     height: 380
     when: windowShown
-    visible: true
+    visible: running
 
     LayersPanel {
         id: panel

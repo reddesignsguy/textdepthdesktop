@@ -1,5 +1,6 @@
 #ifndef TEXTDEPTH_H
 #define TEXTDEPTH_H
+#include "BackPreview.h"
 
 #include <QQuickPaintedItem>
 #include <QBasicTimer>
@@ -107,6 +108,10 @@ public:
     void moveUnit(int from, int to);
     bool handleToggleUnitVisibility(const QUuid &id);
     RenderedTextDepthUnits renderedUnits() const;
+    bool beginBackTranslation(const QUuid &id);
+    void translateBack(const QUuid &id, QPointF delta);
+    void finishBackTranslation(const QUuid &id);
+    void cancelBackTranslation();
 
     Q_INVOKABLE bool loadPsd(const QUrl &fileUrl);
 
@@ -124,6 +129,7 @@ public slots:
     Q_INVOKABLE void writeToPhotoshop();
 
 signals:
+    void backPreviewChanged(const BackPreview &preview);
     void unitEditFailed(const QString &message);
     void psdLoadFailed(const QString &message);
     void textChanged(); // probs dont need dis
@@ -134,6 +140,8 @@ private:
     int m_width;
     int m_height;
     TextDepthUnits m_units;
+    struct BackTranslation { QUuid id; QPointF originalPosition; };
+    std::optional<BackTranslation> m_backTranslation;
 
     struct TextLayerData
     {

@@ -48,6 +48,12 @@ int main(int argc, char *argv[])
     QObject::connect(&unitProperties, &UnitPropertiesModel::toggleBackRequested,
                      &backend, &TextDepth::handleToggleUnitVisibility);
 
+    QObject::connect(&unitProperties, &UnitPropertiesModel::translationStarted, &backend, &TextDepth::beginBackTranslation);
+    QObject::connect(&unitProperties, &UnitPropertiesModel::translationChanged, &backend, &TextDepth::translateBack);
+    QObject::connect(&unitProperties, &UnitPropertiesModel::translationFinished, &backend, &TextDepth::finishBackTranslation);
+    QObject::connect(&unitProperties, &UnitPropertiesModel::translationCanceled, &backend, &TextDepth::cancelBackTranslation);
+    QObject::connect(&backend, &TextDepth::backPreviewChanged, &frontend, &TextDepthViewport::handleBackPreview);
+
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,

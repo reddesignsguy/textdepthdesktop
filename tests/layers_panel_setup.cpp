@@ -10,6 +10,21 @@ class LayersPanelSetup : public QObject
 {
     Q_OBJECT
 public:
+    LayersPanelSetup()
+    {
+        connect(&m_backend, &TextDepth::notifyNewQtData, &m_model, &LayerUIModel::setUnits);
+        connect(&m_model, &LayerUIModel::moveRequested, &m_backend, &TextDepth::moveUnit);
+        connect(&m_backend, &TextDepth::notifyNewQtData, &m_properties, &UnitPropertiesModel::setUnits);
+        connect(&m_model, &LayerUIModel::selectedRowChanged, &m_properties, [this] {
+            m_properties.selectUnit(m_model.selectedUnitId());
+        });
+        connect(&m_properties, &UnitPropertiesModel::toggleBackRequested, &m_backend, &TextDepth::handleToggleUnitVisibility);
+        connect(&m_properties, &UnitPropertiesModel::translationStarted, &m_backend, &TextDepth::beginBackTranslation);
+        connect(&m_properties, &UnitPropertiesModel::translationChanged, &m_backend, &TextDepth::translateBack);
+        connect(&m_properties, &UnitPropertiesModel::translationFinished, &m_backend, &TextDepth::finishBackTranslation);
+        connect(&m_properties, &UnitPropertiesModel::translationCanceled, &m_backend, &TextDepth::cancelBackTranslation);
+    }
+
     Q_INVOKABLE void resetUnits(int count = 3) {
         TextDepthUnits units(count);
         for (auto &unit : units)
@@ -19,13 +34,6 @@ public:
 public slots:
     void qmlEngineAvailable(QQmlEngine *engine)
     {
-        connect(&m_backend, &TextDepth::notifyNewQtData, &m_model, &LayerUIModel::setUnits);
-        connect(&m_model, &LayerUIModel::moveRequested, &m_backend, &TextDepth::moveUnit);
-        connect(&m_backend, &TextDepth::notifyNewQtData, &m_properties, &UnitPropertiesModel::setUnits);
-        connect(&m_model, &LayerUIModel::selectedRowChanged, &m_properties, [&] {
-            m_properties.selectUnit(m_model.selectedUnitId());
-        });
-        connect(&m_properties, &UnitPropertiesModel::toggleBackRequested, &m_backend, &TextDepth::handleToggleUnitVisibility);
         engine->rootContext()->setContextProperty("documentLayerModel", &m_model);
         engine->rootContext()->setContextProperty("unitPropertiesModel", &m_properties);
         engine->rootContext()->setContextProperty("textDepthBackend", &m_backend);

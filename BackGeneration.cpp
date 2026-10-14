@@ -442,20 +442,44 @@ QImage createBackLayerShadows(const std::vector<Quad> quads, int width, int heig
 Back generateBack(const Front &front, QSize canvasSize,
                   QPointF relativePosition, QPointF relativeSize)
 {
+    qDebug() << " Albany !";
     const auto &path = front.vectorMaskData;
     const auto bounds = path.boundingRect();
     if (path.isEmpty() || bounds.width() <= 0 || bounds.height() <= 0)
         throw std::invalid_argument("A non-empty front vector mask is required.");
-    const auto center = bounds.center();
-    QTransform transform;
-    transform.translate(center.x(), center.y());
-    transform.scale(relativeSize.x(), relativeSize.y());
-    transform.translate(-center.x(), -center.y());
-    transform.translate(relativePosition.x(), relativePosition.y());
-    const auto quads = createFrontAndBackConnection(path, path * transform);
+    const auto quads = createFrontAndBackConnection(path, backOutline(front, relativePosition, relativeSize));
     Back back;
     back.baseLayer = createBackLayerBase(quads, canvasSize.width(), canvasSize.height(), QColor(133, 67, 14));
     back.clippedLayers.push_back(createBackLayerShadows(quads, canvasSize.width(), canvasSize.height(),
                                                        QColor(77, 24, 0), QColor(133, 67, 14)));
     return back;
+}
+
+QPainterPath backOutline(const Front &front, QPointF relativePosition, QPointF relativeSize)
+{
+    const auto center = front.vectorMaskData.boundingRect().center();
+    QTransform transform;
+    // Relative position is a document-space offset, independent of back scale.
+    transform.translate(relativePosition.x(), relativePosition.y());
+    transform.translate(center.x(), center.y());
+    transform.scale(relativeSize.x(), relativeSize.y());
+    transform.translate(-center.x(), -center.y());
+    return transform.map(front.vectorMaskData);
+}
+
+QPainterPath backWireframe(const Front &front, QPointF relativePosition, QPointF relativeSize)
+{
+    const auto back = backOutline(front, relativePosition, relativeSize);
+    QPainterPath wireframe = back;
+    const auto &path = front.vectorMaskData;
+    // Curve anchors provide readable connectors without rasterizing every edge.
+    for (int i = 0; i < path.elementCount(); ++i) {
+        const auto point = path.elementAt(i);
+        if (point.isCurveTo()) i += 2;
+        const auto anchor = path.elementAt(i);
+        const auto target = back.elementAt(i);
+        wireframe.moveTo(anchor.x, anchor.y);
+        wireframe.lineTo(target.x, target.y);
+    }
+    return wireframe;
 }

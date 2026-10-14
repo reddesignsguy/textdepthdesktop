@@ -103,6 +103,7 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
 
 void TextDepth::setUnits(TextDepthUnits units)
 {
+    cancelBackTranslation();
     QSet<QUuid> ids;
     for (auto &unit : units) {
         if (unit.id.isNull() || ids.contains(unit.id))
@@ -127,6 +128,7 @@ void TextDepth::moveUnit(int from, int to)
 
 bool TextDepth::handleToggleUnitVisibility(const QUuid &id)
 {
+    cancelBackTranslation();
     auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &candidate) {
         return candidate.id == id;
     });
@@ -145,6 +147,57 @@ bool TextDepth::handleToggleUnitVisibility(const QUuid &id)
     unit->backVisible = visible;
     publishQtData();
     return true;
+}
+
+bool TextDepth::beginBackTranslation(const QUuid &id)
+{
+    cancelBackTranslation();
+    const auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
+    if (unit == m_units.end() || !unit->backVisible || unit->front.vectorMaskData.isEmpty())
+        return false;
+    m_backTranslation = BackTranslation{id, unit->back2FrontRelativePos};
+    translateBack(id, {});
+    return true;
+}
+
+void TextDepth::translateBack(const QUuid &id, QPointF delta)
+{
+    if (!m_backTranslation || m_backTranslation->id != id ||
+        !std::isfinite(delta.x()) || !std::isfinite(delta.y())) return;
+    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
+    if (unit == m_units.end()) return;
+    unit->back2FrontRelativePos = m_backTranslation->originalPosition + delta;
+    emit backPreviewChanged({id, backWireframe(unit->front, unit->back2FrontRelativePos,
+                                             unit->back2FrontRelativeSize)});
+}
+
+void TextDepth::finishBackTranslation(const QUuid &id)
+{
+    if (!m_backTranslation || m_backTranslation->id != id) return;
+    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
+    if (unit == m_units.end()) { cancelBackTranslation(); return; }
+    try {
+        if (unit->back2FrontRelativePos != m_backTranslation->originalPosition)
+            unit->back = generateBack(unit->front, QSize(m_width, m_height),
+                                      unit->back2FrontRelativePos, unit->back2FrontRelativeSize);
+    } catch (const std::exception &error) {
+        cancelBackTranslation();
+        emit unitEditFailed(tr("Could not move back: %1").arg(QString::fromUtf8(error.what())));
+        return;
+    }
+    m_backTranslation.reset();
+    emit backPreviewChanged({});
+    publishQtData();
+}
+
+void TextDepth::cancelBackTranslation()
+{
+    if (!m_backTranslation) return;
+    for (auto &unit : m_units)
+        if (unit.id == m_backTranslation->id)
+            unit.back2FrontRelativePos = m_backTranslation->originalPosition;
+    m_backTranslation.reset();
+    emit backPreviewChanged({});
 }
 
 RenderedTextDepthUnits TextDepth::renderedUnits() const

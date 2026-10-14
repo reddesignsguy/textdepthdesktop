@@ -1,50 +1,35 @@
 #ifndef TEXTDEPTHVIEWPORT_H
 #define TEXTDEPTHVIEWPORT_H
-
-#include <QList>
 #include "TextDepthUnit.h"
-#include <drawable.h>
+#include "BackPreview.h"
+#include "drawable.h"
 #include <QQuickPaintedItem>
-#include <iostream>
+#include <QTimer>
+#include <QElapsedTimer>
 
 class TextDepthViewport : public QQuickPaintedItem
 {
     Q_OBJECT
     QML_ELEMENT
-    // Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
+    Q_PROPERTY(QColor wireframeColor READ wireframeColor WRITE setWireframeColor NOTIFY wireframeColorChanged)
 public:
-    TextDepthViewport(QQuickItem *parent = nullptr);
-
-    void mousePressEvent(QMouseEvent* event)
-    {
-
-        QPointF localPos = event->position();        // item-local coords
-        QPointF scenePos = event->scenePosition();   // scene coords
-        QPointF globalPos = event->globalPosition(); // screen coords
-
-        qDebug() << "scene pos: "<< scenePos;
-
-        qDebug() << "local pos (real!): " << localPos;
-        qDebug() << "global pos: " << globalPos;
-        qDebug() << "-----------" ;
-    }
-
+    explicit TextDepthViewport(QQuickItem *parent = nullptr);
     void paint(QPainter *painter) override;
-
-    QString text() const { std::cout<< "hi"<<std::endl; }
-    void setText(const QString &text);
-    void draw();
-    // TODO: Refactor me! Im so ugly!
-    // Q_INVOKABLE void writeToPhotoshop();
-signals:
-    void textChanged();
-
+    QColor wireframeColor() const { return m_wireframeColor; }
+    void setWireframeColor(QColor color);
 public slots:
     void drawLayers(std::vector<TextDrawable> texts);
-    void handleNewQtData(const RenderedTextDepthUnits &qData);
-
+    void handleNewQtData(const RenderedTextDepthUnits &units);
+    void handleBackPreview(const BackPreview &preview);
+signals:
+    void wireframeColorChanged();
 private:
-    std::vector<std::unique_ptr<Drawable>> m_thingsToDraw;
+    struct RenderItem { QUuid id; TextDrawable drawable; };
+    std::vector<RenderItem> m_items;
+    // Only the current transient preview survives until the next paint/event.
+    BackPreview m_preview;
+    QColor m_wireframeColor{0, 255, 80};
+    QTimer m_pulseTimer;
+    QElapsedTimer m_pulseClock;
 };
-
-#endif // TEXTDEPTHVIEWPORT_H
+#endif

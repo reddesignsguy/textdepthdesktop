@@ -41,6 +41,11 @@ struct TextDrawable : public Drawable {
         for (auto & backLayer : backTextLayers) {
             backLayer.draw(painter);
         }
+        painter->restore();
+        drawFront(painter);
+    }
+    void drawFront(QPainter *painter) {
+        painter->save();
         if (!frontText.path.isEmpty())
             painter->setClipPath(frontText.path, Qt::IntersectClip);
         frontTextBase.draw(painter);

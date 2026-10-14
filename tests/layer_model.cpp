@@ -4,6 +4,7 @@
 #include <QGuiApplication>
 #include "TextDepthViewport.h"
 #include "qtToPhotoshopAPI.h"
+#include "BackGeneration.h"
 #include <type_traits>
 #include <QPersistentModelIndex>
 #include <stdexcept>
@@ -156,6 +157,59 @@ int main(int argc, char **argv)
     duplicate[1].id = duplicate[0].id;
     backend.setUnits(duplicate);
     check(backend.units()[0].id != backend.units()[1].id, "duplicate imported IDs cannot cross-toggle units");
+    // Preview belongs to its unit's paint slot, never a global overlay.
+    overlapping[1].front.vectorMaskData.addRect(10, 10, 10, 10);
+    overlapping[1].backVisible = true;
+    backend.setUnits(overlapping);
+    QPainterPath previewPath;
+    previewPath.moveTo(5, 6); previewPath.lineTo(25, 6);
+    viewport.handleBackPreview({topId, previewPath});
+    const auto previewPixel = render().pixelColor(12, 6);
+    check(previewPixel.green() > previewPixel.red(), "upper wireframe draws above lower front");
+    check(render().pixelColor(12, 12) == QColor(Qt::blue), "preview preserves own front");
+    check(render().pixelColor(6, 8) == QColor(Qt::red), "preview suppresses cached back raster");
+    backend.moveUnit(1, 0);
+    check(render().pixelColor(12, 6) == QColor(Qt::red), "upper front occludes lower wireframe");
+    viewport.handleBackPreview({});
+
+    // A translation emits only lightweight previews until release.
+    TextDepthUnits movable(2);
+    movable[0].front.vectorMaskData.addRect(10, 10, 30, 30);
+    movable[1].front.vectorMaskData.addRect(15, 15, 30, 30);
+    backend.setUnits(movable);
+    const auto movingId = movable[0].id;
+    backend.handleToggleUnitVisibility(movingId);
+    const auto cached = backend.units()[0].back->baseLayer;
+    const auto originalOffset = backend.units()[0].back2FrontRelativePos;
+    BackPreview preview;
+    int previews = 0;
+    QObject::connect(&backend, &TextDepth::backPreviewChanged, &viewport, &TextDepthViewport::handleBackPreview);
+    QObject::connect(&backend, &TextDepth::backPreviewChanged, [&](const BackPreview &value) {
+        preview = value;
+        ++previews;
+    });
+    const int beforeDrag = publications;
+    check(backend.beginBackTranslation(movingId), "visible back can be dragged");
+    backend.translateBack(movingId, {12, -20});
+    check(preview.unitId == movingId && !preview.wireframe.isEmpty(), "backend sends transient wireframe");
+    check(backend.units()[0].back2FrontRelativePos == originalOffset + QPointF(12, -20), "drag updates domain offset");
+    check(backend.units()[0].back->baseLayer == cached && publications == beforeDrag, "drag does not rasterize or publish document");
+    check(backend.units()[1].back2FrontRelativePos == movable[1].back2FrontRelativePos, "other unit offset unchanged");
+    const auto shifted = backOutline(movable[0].front, originalOffset + QPointF(12, -20), movable[0].back2FrontRelativeSize);
+    const auto unshifted = backOutline(movable[0].front, originalOffset, movable[0].back2FrontRelativeSize);
+    check(shifted.boundingRect().topLeft() - unshifted.boundingRect().topLeft() == QPointF(12, -20), "translation is independent of scale");
+    backend.moveUnit(0, 1);
+    backend.finishBackTranslation(movingId);
+    check(preview.unitId.isNull(), "release clears wireframe");
+    check(backend.units()[1].back->baseLayer != cached, "release rasterizes moved back after reorder");
+    const auto committedOffset = backend.units()[1].back2FrontRelativePos;
+    backend.beginBackTranslation(movingId);
+    backend.translateBack(movingId, {5, 5});
+    backend.cancelBackTranslation();
+    check(backend.units()[1].back2FrontRelativePos == committedOffset && preview.unitId.isNull(), "cancel restores committed offset");
+    check(!backend.beginBackTranslation(movable[1].id), "hidden back cannot be dragged");
+    check(previews >= 5, "translation preview lifecycle");
+
     backend.setUnits({});
     check(!properties.hasSelection(), "replacement clears properties");
     qInfo("Layer model and back rendering tests passed");

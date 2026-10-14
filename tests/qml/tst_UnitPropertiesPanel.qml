@@ -6,7 +6,7 @@ TestCase {
     name: "UnitPropertiesPanel"
     width: 400
     height: 300
-    visible: true
+    visible: running
     when: windowShown
 
     UnitPropertiesPanel {
