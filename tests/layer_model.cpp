@@ -100,7 +100,7 @@ int main(int argc, char **argv)
     check(!backend.units()[1].backVisible && !backend.units()[1].back, "only requested unit changes");
     const auto generated = *backend.units()[0].back;
     check(generated.baseLayer.pixelColor(0, 0).alpha() == 0 &&
-          generated.clippedLayers[0].pixelColor(0, 0).alpha() == 0, "generated images start transparent");
+          generated.shadowLayer.pixelColor(0, 0).alpha() == 0, "generated images start transparent");
     const auto oldSnapshot = backend.renderedUnits();
     backend.moveUnit(0, 1);
     properties.requestToggleBack();
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     check(qtToPsApi(backend.renderedUnits())[1].back.baseLayer.empty(), "hidden back omitted from export");
     properties.requestToggleBack();
     check(backend.units()[1].back->baseLayer == generated.baseLayer &&
-          backend.units()[1].back->clippedLayers == generated.clippedLayers, "show reuses cached back");
+          backend.units()[1].back->shadowLayer == generated.shadowLayer, "show reuses cached back");
     check(!qtToPsApi(backend.renderedUnits())[1].back.baseLayer.empty(), "visible back exported");
     properties.selectUnit(effectUnits[1].id);
     check(!properties.canShowBack() && !properties.backVisible(), "empty mask unavailable");
@@ -129,8 +129,9 @@ int main(int argc, char **argv)
     overlapping[1].front.vectorMaskData.addRect(10, 10, 10, 10);
     Back back;
     back.baseLayer = solid(Qt::transparent);
-    { QPainter painter(&back.baseLayer); painter.fillRect(5, 5, 20, 20, Qt::green); }
+    { QPainter painter(&back.baseLayer); painter.fillRect(5, 5, 20, 20, Qt::white); }
     overlapping[1].back = back;
+    overlapping[1].shadowGradient.back().color = Qt::green;
     const auto topId = overlapping[1].id;
     QQuickWindow window;
     window.setColor(Qt::transparent);
@@ -167,7 +168,7 @@ int main(int argc, char **argv)
     properties.selectUnit(topId);
     check(properties.canShowBack(), "cached back can be shown without a vector mask");
     properties.requestToggleBack();
-    check(backend.renderedUnits()[1].back->baseLayer == back.baseLayer, "existing back never regenerated");
+    check(backend.units()[1].back->baseLayer == back.baseLayer, "existing back never regenerated");
     auto duplicate = overlapping;
     duplicate[1].id = duplicate[0].id;
     backend.setUnits(duplicate);
@@ -241,6 +242,56 @@ int main(int argc, char **argv)
     check(backend.units()[1].back2FrontRelativePos == committedOffset && preview.unitId.isNull(), "cancel restores committed offset");
     check(!backend.beginBackTranslation(movable[1].id), "hidden back cannot be dragged");
     check(previews >= 5, "translation preview lifecycle");
+
+    // Gradient mapping preserves coverage and maps black/gray/white to RGB.
+    QImage tones(3, 1, QImage::Format_ARGB32);
+    tones.setPixelColor(0, 0, QColor(0, 0, 0, 255));
+    tones.setPixelColor(1, 0, QColor(128, 128, 128, 127));
+    tones.setPixelColor(2, 0, QColor(255, 255, 255, 0));
+    const QColor light(200, 100, 50), dark(20, 40, 60);
+    const auto colored = mapShadowGradient(tones, {{0, dark}, {1, light}});
+    check(colored.pixelColor(0, 0) == dark, "black maps to darkest shadow");
+    check(colored.pixelColor(1, 0) == QColor(110, 70, 55, 127), "midtones interpolate RGB and preserve alpha");
+    check(colored.pixelColor(2, 0) == QColor(200, 100, 50, 0), "white maps to lightest with transparent coverage");
+    check(generated.baseLayer.isGrayscale() && generated.shadowLayer.isGrayscale(), "generation stores grayscale layers");
+    TextDepthUnits coloredUnits(2);
+    coloredUnits[0].back = Back{tones, tones};
+    coloredUnits[0].backVisible = true;
+    backend.setUnits(coloredUnits);
+    properties.selectUnit(coloredUnits[0].id);
+    QObject::connect(&properties, &UnitPropertiesModel::shadowGradientRequested,
+                     &backend, &TextDepth::handleSetUnitShadowGradient);
+    const auto baseKey = backend.units()[0].back->baseLayer.cacheKey();
+    properties.selectStop(backend.units()[0].shadowGradient.front().id.toString());
+    properties.requestStopColor(dark);
+    properties.selectStop(backend.units()[0].shadowGradient.back().id.toString());
+    properties.requestStopColor(QColor(200, 100, 50, 12));
+    check(properties.selectedStopColor() == light, "stop edits are RGB only");
+    check(backend.units()[1].shadowGradient.back().color == coloredUnits[1].shadowGradient.back().color, "gradient edit is per unit");
+    const auto colorSnapshot = backend.renderedUnits();
+    check(colorSnapshot[0].back->layers[0] == colored && colorSnapshot[0].back->layers[1] == colored, "both images use the gradient");
+    properties.addStop(0.5);
+    check(backend.units()[0].shadowGradient.size() == 3, "add gradient stop");
+    const auto stopId = properties.selectedStopId();
+    properties.requestStopColor(Qt::red);
+    properties.requestStopPosition(0.8);
+    check(properties.selectedStopId() == stopId && properties.selectedStopPosition() == 0.8, "stop position preserves identity");
+    const auto &stops = backend.units()[0].shadowGradient;
+    check(sampleShadowGradient(stops, 0.8) == QColor(Qt::red), "gradient honors added stop");
+    check(sampleShadowGradient({{0.2, dark}, {0.7, light}}, 0) == dark &&
+          sampleShadowGradient({{0.2, dark}, {0.7, light}}, 1) == light, "outer stops extend shadow and highlight levels");
+    properties.requestStopPosition(1);
+    check(sampleShadowGradient(backend.units()[0].shadowGradient, 1).isValid(), "coincident stops remain defined");
+    properties.removeSelectedStop();
+    properties.removeSelectedStop();
+    check(backend.units()[0].shadowGradient.size() == 2, "gradient retains at least two stops");
+    check(backend.units()[0].back->baseLayer.cacheKey() == baseKey, "live edits reuse grayscale geometry cache");
+    auto invalid = backend.units()[0].shadowGradient;
+    invalid[0].position = -1;
+    check(!backend.handleSetUnitShadowGradient(coloredUnits[0].id, invalid), "invalid gradient rejected");
+    backend.handleToggleUnitVisibility(coloredUnits[0].id);
+    properties.requestStopColor(Qt::cyan);
+    check(!backend.renderedUnits()[0].back && properties.selectedStopColor() == QColor(Qt::cyan), "hidden backs retain gradient edits");
 
     backend.setUnits({});
     check(!properties.hasSelection(), "replacement clears properties");

@@ -19,6 +19,7 @@ public:
             m_properties.selectUnit(m_model.selectedUnitId());
         });
         connect(&m_properties, &UnitPropertiesModel::toggleBackRequested, &m_backend, &TextDepth::handleToggleUnitVisibility);
+        connect(&m_properties, &UnitPropertiesModel::shadowGradientRequested, &m_backend, &TextDepth::handleSetUnitShadowGradient);
         connect(&m_properties, &UnitPropertiesModel::translationStarted, &m_backend, &TextDepth::beginBackTranslation);
         connect(&m_properties, &UnitPropertiesModel::translationChanged, &m_backend, &TextDepth::translateBack);
         connect(&m_properties, &UnitPropertiesModel::translationFinished, &m_backend, &TextDepth::finishBackTranslation);

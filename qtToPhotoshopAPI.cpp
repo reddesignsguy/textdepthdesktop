@@ -47,14 +47,14 @@ RenderedTextDepthUnits psApiToQt(const PsApiLayersDto& psData, int width, int he
     qtData.reserve(psData.size());
     for (const auto& text : psData) {
         Front front;
-        Back back;
+        RenderedBack back;
         front.baseLayer = toImage(text.front.baseLayer);
-        back.baseLayer = toImage(text.back.baseLayer);
+        if (!text.back.baseLayer.empty()) back.layers.push_back(toImage(text.back.baseLayer));
         for (const auto& layer : text.front.clippedLayers) {
             front.clippedLayers.push_back(toImage(layer));
         }
         for (const auto& layer : text.back.clippedLayers) {
-            back.clippedLayers.push_back(toImage(layer));
+            back.layers.push_back(toImage(layer));
         }
 
         QPainterPath path;
@@ -104,9 +104,9 @@ RenderedTextDepthUnits psApiToQt(const PsApiLayersDto& psData, int width, int he
         }
 
         front.vectorMaskData = path;
-        const bool hasBack = !back.baseLayer.isNull() || !back.clippedLayers.empty();
+        const bool hasBack = !back.layers.empty();
         qtData.push_back({QUuid::createUuid(), std::move(front),
-                          hasBack ? std::optional<Back>(std::move(back)) : std::nullopt, hasBack});
+                          hasBack ? std::optional<RenderedBack>(std::move(back)) : std::nullopt, hasBack});
     }
     return qtData;
 }
@@ -170,10 +170,10 @@ PsApiLayersDto qtToPsApi(const RenderedTextDepthUnits &units)
         text.front.baseLayer = channels(unit.front.baseLayer);
         for (const auto &image : unit.front.clippedLayers)
             text.front.clippedLayers.push_back(channels(image));
-        if (unit.back) {
-            text.back.baseLayer = channels(unit.back->baseLayer);
-            for (const auto &image : unit.back->clippedLayers)
-                text.back.clippedLayers.push_back(channels(image));
+        if (unit.back && !unit.back->layers.empty()) {
+            text.back.baseLayer = channels(unit.back->layers.front());
+            for (size_t i = 1; i < unit.back->layers.size(); ++i)
+                text.back.clippedLayers.push_back(channels(unit.back->layers[i]));
         }
         result.push_back(std::move(text));
     }

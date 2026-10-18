@@ -47,8 +47,12 @@ std::vector<UnitImages> prepareUnitImages(const RenderedTextDepthUnits &units)
             painter.end();
             front = std::move(masked);
         }
-        result.push_back({unit.id, std::move(front), unit.back
-            ? compositeLayers(unit.back->baseLayer, unit.back->clippedLayers) : QImage{}});
+        QImage back;
+        if (unit.back && !unit.back->layers.empty()) {
+            const auto &layers = unit.back->layers;
+            back = compositeLayers(layers.front(), {layers.begin() + 1, layers.end()});
+        }
+        result.push_back({unit.id, std::move(front), std::move(back)});
     }
     return result;
 }

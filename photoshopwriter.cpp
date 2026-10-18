@@ -8,7 +8,8 @@ void PhotoshopWriter::write(std::string filename, const RenderedTextDepthUnits &
     QSize size;
     for (const auto &unit : units) {
         size = size.expandedTo(unit.front.baseLayer.size());
-        if (unit.back) size = size.expandedTo(unit.back->baseLayer.size());
+        if (unit.back)
+            for (const auto &layer : unit.back->layers) size = size.expandedTo(layer.size());
     }
     if (size.isEmpty()) throw std::invalid_argument("No rendered image to export.");
     LayeredFile<bpp8_t> document(Enum::ColorMode::RGB, size.width(), size.height());
@@ -37,11 +38,11 @@ void PhotoshopWriter::write(std::string filename, const RenderedTextDepthUnits &
         for (int j = static_cast<int>(front.clippedLayers.size()) - 1; j >= 0; --j)
             addImage(data[i].front.clippedLayers[j], front.clippedLayers[j], "Front clip", true, nullptr);
         addImage(data[i].front.baseLayer, front.baseLayer, "Front", false, &data[i].front.vectorMaskData);
-        if (units[i].back) {
-            const auto &back = *units[i].back;
-            for (int j = static_cast<int>(back.clippedLayers.size()) - 1; j >= 0; --j)
-                addImage(data[i].back.clippedLayers[j], back.clippedLayers[j], "Back clip", true, nullptr);
-            addImage(data[i].back.baseLayer, back.baseLayer, "Back", false, nullptr);
+        if (units[i].back && !units[i].back->layers.empty()) {
+            const auto &layers = units[i].back->layers;
+            for (int j = static_cast<int>(layers.size()) - 1; j > 0; --j)
+                addImage(data[i].back.clippedLayers[j - 1], layers[j], "Back clip", true, nullptr);
+            addImage(data[i].back.baseLayer, layers.front(), "Back", false, nullptr);
         }
         targets->layers().push_back(group);
     }

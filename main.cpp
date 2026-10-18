@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
     QObject::connect(&unitProperties, &UnitPropertiesModel::toggleBackRequested,
                      &backend, &TextDepth::handleToggleUnitVisibility);
 
+    QObject::connect(&unitProperties, &UnitPropertiesModel::shadowGradientRequested, &backend, &TextDepth::handleSetUnitShadowGradient);
     QObject::connect(&unitProperties, &UnitPropertiesModel::translationStarted, &backend, &TextDepth::beginBackTranslation);
     QObject::connect(&unitProperties, &UnitPropertiesModel::translationChanged, &backend, &TextDepth::translateBack);
     QObject::connect(&unitProperties, &UnitPropertiesModel::translationFinished, &backend, &TextDepth::finishBackTranslation);

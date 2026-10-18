@@ -88,8 +88,7 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
             TextDepthUnit unit;
             unit.id = rendered.id;
             unit.front = rendered.front;
-            unit.back = rendered.back;
-            unit.backVisible = unit.back.has_value();
+            // PSD loading currently extracts fronts; generated backs start uncached.
             units.push_back(std::move(unit));
         }
         setUnits(std::move(units));
@@ -145,6 +144,24 @@ bool TextDepth::handleToggleUnitVisibility(const QUuid &id)
         }
     }
     unit->backVisible = visible;
+    publishQtData();
+    return true;
+}
+
+bool TextDepth::handleSetUnitShadowGradient(const QUuid &id, ShadowGradient stops)
+{
+    if (stops.size() < 2) return false;
+    QSet<QUuid> ids;
+    for (auto &stop : stops) {
+        if (!stop.color.isValid() || !std::isfinite(stop.position) || stop.position < 0 || stop.position > 1
+            || stop.id.isNull() || ids.contains(stop.id)) return false;
+        ids.insert(stop.id);
+        stop.color = QColor(stop.color.red(), stop.color.green(), stop.color.blue());
+    }
+    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
+    if (unit == m_units.end()) return false;
+    std::stable_sort(stops.begin(), stops.end(), [](const auto &a, const auto &b) { return a.position < b.position; });
+    unit->shadowGradient = std::move(stops);
     publishQtData();
     return true;
 }
@@ -205,8 +222,7 @@ RenderedTextDepthUnits TextDepth::renderedUnits() const
     RenderedTextDepthUnits rendered;
     rendered.reserve(m_units.size());
     for (const auto &unit : m_units) {
-        rendered.push_back({unit.id, unit.front,
-                           unit.backVisible ? unit.back : std::nullopt, unit.back.has_value()});
+        rendered.push_back(renderUnit(unit));
     }
     return rendered;
 }

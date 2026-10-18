@@ -108,6 +108,7 @@ public:
     void moveUnit(int from, int to);
     bool handleToggleUnitVisibility(const QUuid &id);
     RenderedTextDepthUnits renderedUnits() const;
+    bool handleSetUnitShadowGradient(const QUuid &id, ShadowGradient stops);
     bool beginBackTranslation(const QUuid &id);
     void translateBack(const QUuid &id, QPointF delta);
     void finishBackTranslation(const QUuid &id);

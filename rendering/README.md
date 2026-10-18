@@ -47,3 +47,22 @@ units beyond the canvas. It also checks constant connector vertex count and
 geometry reuse across color changes. It needs a graphics-capable display; Qt's
 `offscreen` platform can silently choose software rendering, which this test
 rejects. The other tests continue to run headlessly.
+
+## Back colors
+
+The backend's `Back` cache has named `baseLayer` and `shadowLayer` grayscale images.
+Their alpha is coverage, while black-to-white intensity describes lighting.
+`TextDepthUnit` owns an ordered `shadowGradient` of RGB stops with stable IDs and
+positions from 0 to 1. Stops interpolate linearly in RGB; values outside the first
+and last stop use their nearest color. Moving the outer stops changes the
+shadow/highlight levels. Coincident stops create a hard transition.
+`renderUnit()` in `TextDepthUnit.cpp` gradient-maps both cached images into an
+ordered `RenderedBack::layers` list: base first, shadow second. The viewport and
+PSD export consume that order without knowing which image represents shading.
+Color edits publish a new snapshot without rerunning geometry generation.
+
+The properties panel uses an inline saturation/brightness square and hue slider.
+Every drag requests a gradient update and publishes a new colored snapshot.
+Adding a stop samples the current gradient so the appearance initially stays
+unchanged. At least two stops are retained. Selected stop identity survives
+sorting, so dragging through another stop continues editing the same stop.

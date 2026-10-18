@@ -364,7 +364,7 @@ QImage createBackLayerBase(const std::vector<Quad> quads, int width, int height,
     return image;
 }
 
-QImage createBackLayerShadows(const std::vector<Quad> quads, int width, int height, const QColor & darkestColor, const QColor & lightestColor)
+QImage createBackLayerShadows(const std::vector<Quad> quads, int width, int height)
 {
     QImage image(width, height, QImage::Format_ARGB32);
     if (image.isNull()) throw std::runtime_error("Could not allocate back layers.");
@@ -380,8 +380,9 @@ QImage createBackLayerShadows(const std::vector<Quad> quads, int width, int heig
         // Alpha value calculations for the core shadow "lo" layer
         int interpolatedCoreShadowLoOpacity = calculateCoreShadowLoOpacityFromAngle(frontP1, frontP2);
         interpolatedCoreShadowLoOpacity = 255 - interpolatedCoreShadowLoOpacity;
-        QColor interpolatedCoreShadowLoColor = darkestColor;
-        interpolatedCoreShadowLoColor.setAlpha(interpolatedCoreShadowLoOpacity);
+        // Store lighting in intensity, leaving alpha exclusively for coverage.
+        const int intensity = 255 - interpolatedCoreShadowLoOpacity;
+        const QColor interpolatedCoreShadowLoColor(intensity, intensity, intensity);
         // ===================================================================
 
         const auto &points = quad.getPoints();
@@ -449,9 +450,8 @@ Back generateBack(const Front &front, QSize canvasSize,
         throw std::invalid_argument("A non-empty front vector mask is required.");
     const auto quads = createFrontAndBackConnection(path, backOutline(front, relativePosition, relativeSize));
     Back back;
-    back.baseLayer = createBackLayerBase(quads, canvasSize.width(), canvasSize.height(), QColor(133, 67, 14));
-    back.clippedLayers.push_back(createBackLayerShadows(quads, canvasSize.width(), canvasSize.height(),
-                                                       QColor(77, 24, 0), QColor(133, 67, 14)));
+    back.baseLayer = createBackLayerBase(quads, canvasSize.width(), canvasSize.height(), Qt::white);
+    back.shadowLayer = createBackLayerShadows(quads, canvasSize.width(), canvasSize.height());
     return back;
 }
 

@@ -168,6 +168,8 @@ Window {
                 }
                 UnitPropertiesPanel {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(implicitHeight, mainWindow.height * 0.55)
+                    Layout.minimumHeight: 0
                     propertiesModel: unitPropertiesModel
                 }
             }
