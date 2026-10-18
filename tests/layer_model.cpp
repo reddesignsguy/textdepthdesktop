@@ -2,6 +2,9 @@
 #include "TextDepth.h"
 #include "UnitPropertiesModel.h"
 #include <QGuiApplication>
+#include <QQuickWindow>
+#include <QSurfaceFormat>
+#include "rendering/WireframeNode.h"
 #include "TextDepthViewport.h"
 #include "qtToPhotoshopAPI.h"
 #include "BackGeneration.h"
@@ -16,6 +19,10 @@ static void check(bool value, const char *message)
 
 int main(int argc, char **argv)
 {
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+    QSurfaceFormat format;
+    format.setSamples(4);
+    QSurfaceFormat::setDefaultFormat(format);
     QGuiApplication app(argc, argv);
     TextDepth backend(64, 256);
     LayerUIModel model;
@@ -109,7 +116,7 @@ int main(int argc, char **argv)
     check(!backend.handleToggleUnitVisibility(effectUnits[1].id), "empty mask rejected");
     check(!backend.handleToggleUnitVisibility(QUuid::createUuid()), "missing unit rejected");
 
-    // Pixel-level stacking check through the actual viewport receiver and painter.
+    // Pixel-level stacking check through the OpenGL scene graph.
     const auto solid = [](QColor color) {
         QImage image(64, 256, QImage::Format_ARGB32);
         image.fill(color);
@@ -125,13 +132,21 @@ int main(int argc, char **argv)
     { QPainter painter(&back.baseLayer); painter.fillRect(5, 5, 20, 20, Qt::green); }
     overlapping[1].back = back;
     const auto topId = overlapping[1].id;
+    QQuickWindow window;
+    window.setColor(Qt::transparent);
+    window.resize(64, 256);
     TextDepthViewport viewport;
+    viewport.setParentItem(window.contentItem());
+    viewport.setSize(QSizeF(64, 256));
+    window.show();
+    QCoreApplication::processEvents();
     QObject::connect(&backend, &TextDepth::notifyNewQtData, &viewport, &TextDepthViewport::handleNewQtData);
     const auto render = [&] {
-        auto image = solid(Qt::transparent);
-        QPainter painter(&image);
-        viewport.paint(&painter);
-        return image;
+        const auto frame = window.grabWindow();
+        check(!frame.isNull(), "OpenGL framebuffer is available");
+        check(window.rendererInterface()->graphicsApi() == QSGRendererInterface::OpenGL,
+              "pixel checks use OpenGL");
+        return frame.scaled(64, 256);
     };
     backend.setUnits(overlapping);
     check(render().pixelColor(6, 6) == QColor(Qt::red), "hidden top back does not draw");
@@ -162,7 +177,7 @@ int main(int argc, char **argv)
     overlapping[1].backVisible = true;
     backend.setUnits(overlapping);
     QPainterPath previewPath;
-    previewPath.moveTo(5, 6); previewPath.lineTo(25, 6);
+    previewPath.moveTo(5, 6); previewPath.lineTo(100000, 6);
     viewport.handleBackPreview({topId, previewPath});
     const auto previewPixel = render().pixelColor(12, 6);
     check(previewPixel.green() > previewPixel.red(), "upper wireframe draws above lower front");
@@ -171,6 +186,23 @@ int main(int argc, char **argv)
     backend.moveUnit(1, 0);
     check(render().pixelColor(12, 6) == QColor(Qt::red), "upper front occludes lower wireframe");
     viewport.handleBackPreview({});
+
+    // Longer connectors consume the same amount of GPU geometry. Pulsing only
+    // changes the material; it must not regenerate or reallocate that geometry.
+    WireframeNode wireframe;
+    QPainterPath shortLine;
+    shortLine.moveTo(0, 0); shortLine.lineTo(10, 10);
+    wireframe.setPath(shortLine, 1.5);
+    const auto shortCount = wireframe.geometry()->vertexCount();
+    QPainterPath longLine;
+    longLine.moveTo(0, 0); longLine.lineTo(100000, 100000);
+    wireframe.setPath(longLine, 1.5);
+    check(shortCount == 6 && wireframe.geometry()->vertexCount() == shortCount,
+          "connector length does not increase mesh size");
+    const auto *vertices = wireframe.geometry()->vertexData();
+    wireframe.setColor(Qt::green);
+    wireframe.setColor(Qt::darkGreen);
+    check(wireframe.geometry()->vertexData() == vertices, "pulse reuses geometry");
 
     // A translation emits only lightweight previews until release.
     TextDepthUnits movable(2);

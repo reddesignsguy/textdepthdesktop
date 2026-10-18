@@ -40,6 +40,8 @@ qt_add_qml_module(appTextDepthOG
         SOURCES qtToPhotoshopAPI.cpp
         SOURCES LayerUIModel.h LayerUIModel.cpp
         SOURCES TextDepthViewport.h TextDepthViewport.cpp
+        SOURCES rendering/WireframeNode.h rendering/WireframeNode.cpp
+        SOURCES rendering/ViewportScene.h rendering/ViewportScene.cpp
         SOURCES drawable.h
 )
 
@@ -87,6 +89,8 @@ if(TEXTDEPTH_BUILD_TESTS)
     qt_add_executable(textdepth_layer_model_test
         tests/layer_model.cpp LayerUIModel.h LayerUIModel.cpp
         TextDepthViewport.h TextDepthViewport.cpp
+        rendering/WireframeNode.h rendering/WireframeNode.cpp
+        rendering/ViewportScene.h rendering/ViewportScene.cpp
         UnitPropertiesModel.h UnitPropertiesModel.cpp
         BackGeneration.h BackGeneration.cpp
         TextDepth.h TextDepth.cpp PhotoshopWriter.cpp qtToPhotoshopAPI.cpp
@@ -94,8 +98,9 @@ if(TEXTDEPTH_BUILD_TESTS)
     )
     target_include_directories(textdepth_layer_model_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(textdepth_layer_model_test PRIVATE Qt6::Quick PhotoshopAPI)
-    add_test(NAME layer_model COMMAND textdepth_layer_model_test -platform offscreen)
-    set_tests_properties(layer_model PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Basic;QT_QUICK_BACKEND=software")
+    # This includes framebuffer checks and must exercise a hardware backend.
+    add_test(NAME layer_model COMMAND textdepth_layer_model_test)
+    set_tests_properties(layer_model PROPERTIES ENVIRONMENT "QT_QUICK_CONTROLS_STYLE=Basic;QSG_RHI_BACKEND=opengl")
 
     find_package(Qt6 REQUIRED COMPONENTS QuickTest)
     qt_add_executable(textdepth_layers_panel_test

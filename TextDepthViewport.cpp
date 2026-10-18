@@ -1,8 +1,10 @@
 #include "TextDepthViewport.h"
 #include <cmath>
 
-TextDepthViewport::TextDepthViewport(QQuickItem *parent) : QQuickPaintedItem(parent)
+TextDepthViewport::TextDepthViewport(QQuickItem *parent) : QQuickItem(parent)
 {
+    setFlag(ItemHasContents);
+    setClip(true);
     m_pulseTimer.setInterval(16);
     connect(&m_pulseTimer, &QTimer::timeout, this, [this] { update(); });
 }
@@ -15,6 +17,15 @@ void TextDepthViewport::setWireframeColor(QColor color)
     update();
 }
 
+void TextDepthViewport::setWireframeWidth(qreal width)
+{
+    if (!std::isfinite(width) || width <= 0 || m_wireframeWidth == width) return;
+    m_wireframeWidth = width;
+    ++m_previewRevision;
+    emit wireframeWidthChanged();
+    update();
+}
+
 void TextDepthViewport::handleBackPreview(const BackPreview &preview)
 {
     if (!preview.unitId.isNull() && m_preview.unitId.isNull()) {
@@ -22,69 +33,41 @@ void TextDepthViewport::handleBackPreview(const BackPreview &preview)
         m_pulseTimer.start();
     }
     m_preview = preview;
+    ++m_previewRevision;
     if (preview.unitId.isNull()) m_pulseTimer.stop();
     update();
 }
 
-void TextDepthViewport::drawLayers(std::vector<TextDrawable> layers)
-{
-    for (auto &layer : layers) m_items.push_back({{}, std::move(layer)});
-    update();
-}
-
-namespace {
-QImage compositeLayers(const QImage &base, const std::vector<QImage> &clips)
-{
-    if (base.isNull()) return {};
-    QImage image = base.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    QPainter painter(&image);
-    painter.setCompositionMode(QPainter::CompositionMode_SourceAtop);
-    for (const auto &clip : clips)
-        painter.drawImage(0, 0, clip);
-    return image;
-}
-}
-
 void TextDepthViewport::handleNewQtData(const RenderedTextDepthUnits &units)
 {
-    m_items.clear();
-    // Snapshots are in paint order: draw the entire lower unit before the next.
-    for (const auto &unit : units) {
-        TextDrawable drawable;
-        if (unit.back) {
-            ImageDrawable back;
-            back.image = compositeLayers(unit.back->baseLayer, unit.back->clippedLayers);
-            drawable.backTextLayers.push_back(std::move(back));
-        }
-        drawable.frontText.path = unit.front.vectorMaskData;
-        drawable.frontTextBase.image = compositeLayers(unit.front.baseLayer, unit.front.clippedLayers);
-        m_items.push_back({unit.id, std::move(drawable)});
-    }
+    m_images = prepareUnitImages(units);
+    ++m_documentRevision;
     update();
 }
 
-void TextDepthViewport::paint(QPainter *painter)
+QSGNode *TextDepthViewport::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 {
-    for (auto &item : m_items) {
-        if (item.id != m_preview.unitId || m_preview.unitId.isNull()) {
-            item.drawable.draw(painter);
-            continue;
-        }
-        painter->save();
+    // Qt synchronizes item state here with the GUI thread blocked. All GPU
+    // resources belong to this tree and are destroyed by Qt on the render thread.
+    auto *scene = static_cast<ViewportScene *>(oldNode);
+    if (!scene) scene = new ViewportScene;
+    if (scene->documentRevision != m_documentRevision) {
+        scene->setUnits(window(), m_images);
+        scene->documentRevision = m_documentRevision;
+        scene->previewRevision = 0;
+    }
+    if (scene->previewRevision != m_previewRevision) {
+        scene->setPreview(m_preview, m_wireframeWidth);
+        scene->previewRevision = m_previewRevision;
+    }
+    if (!m_preview.unitId.isNull()) {
         const double brightness = 0.65 + 0.35 * std::sin(m_pulseClock.elapsed() * 0.005);
         QColor color = m_wireframeColor;
         color.setRedF(color.redF() * brightness);
         color.setGreenF(color.greenF() * brightness);
         color.setBlueF(color.blueF() * brightness);
-        QPen pen(color, 1.5);
-        pen.setCosmetic(true);
-        painter->setPen(pen);
-        painter->setBrush(Qt::NoBrush);
-        painter->setRenderHint(QPainter::Antialiasing);
-        qDebug() << "b4!" << QTime::currentTime();
-        painter->drawPath(m_preview.wireframe);
-        qDebug() << "aft!" << QTime::currentTime();
-        painter->restore();
-        item.drawable.drawFront(painter);
+        // Holding still updates a material, reusing all geometry and textures.
+        scene->setPreviewColor(color);
     }
+    return scene;
 }

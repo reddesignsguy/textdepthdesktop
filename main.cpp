@@ -1,4 +1,6 @@
 #include <QGuiApplication>
+#include <QQuickWindow>
+#include <QSurfaceFormat>
 #include <QQmlApplicationEngine>
 #include <QQMLContext>
 #include <TextDepth.h>
@@ -9,6 +11,10 @@
 
 int main(int argc, char *argv[])
 {
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+    QSurfaceFormat format;
+    format.setSamples(4);
+    QSurfaceFormat::setDefaultFormat(format);
     QGuiApplication app(argc, argv);
     qRegisterMetaType<RenderedTextDepthUnits>("RenderedTextDepthUnits");
 
