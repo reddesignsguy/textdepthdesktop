@@ -7,7 +7,8 @@ ToolBar {
     property string activeTool: "navigate"
     readonly property var tools: [
         { key: "navigate", label: qsTr("Navigate canvas"), icon: "icons/navigate.svg" },
-        { key: "backMove", label: qsTr("Move back"), icon: "icons/back-move.svg" }
+        { key: "backMove", label: qsTr("Move back"), icon: "icons/back-move.svg" },
+        { key: "backResize", label: qsTr("Scale back proportionally — drag right/down to enlarge, left/up to shrink"), icon: "icons/back-resize.svg" }
     ]
     ButtonGroup { id: toolGroup }
     RowLayout {

@@ -150,6 +150,13 @@ Window {
                     enabled: canvasTools.activeTool === "backMove"
                     visible: enabled
                 }
+                BackResizeTool {
+                    anchors.fill: parent
+                    scene: canvasScene
+                    propertiesModel: unitPropertiesModel
+                    enabled: canvasTools.activeTool === "backResize"
+                    visible: enabled
+                }
             }
             ColumnLayout {
                 objectName: "editorSidebar"

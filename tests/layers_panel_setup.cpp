@@ -24,6 +24,10 @@ public:
         connect(&m_properties, &UnitPropertiesModel::translationChanged, &m_backend, &TextDepth::translateBack);
         connect(&m_properties, &UnitPropertiesModel::translationFinished, &m_backend, &TextDepth::finishBackTranslation);
         connect(&m_properties, &UnitPropertiesModel::translationCanceled, &m_backend, &TextDepth::cancelBackTranslation);
+        connect(&m_properties, &UnitPropertiesModel::resizeStarted, &m_backend, &TextDepth::beginBackResize);
+        connect(&m_properties, &UnitPropertiesModel::resizeChanged, &m_backend, &TextDepth::resizeBack);
+        connect(&m_properties, &UnitPropertiesModel::resizeFinished, &m_backend, &TextDepth::finishBackResize);
+        connect(&m_properties, &UnitPropertiesModel::resizeCanceled, &m_backend, &TextDepth::cancelBackResize);
     }
 
     Q_INVOKABLE void resetUnits(int count = 3) {

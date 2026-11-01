@@ -103,6 +103,7 @@ bool TextDepth::loadPsd(const QUrl &fileUrl)
 void TextDepth::setUnits(TextDepthUnits units)
 {
     cancelBackTranslation();
+    cancelBackResize();
     QSet<QUuid> ids;
     for (auto &unit : units) {
         if (unit.id.isNull() || ids.contains(unit.id))
@@ -128,6 +129,7 @@ void TextDepth::moveUnit(int from, int to)
 bool TextDepth::handleToggleUnitVisibility(const QUuid &id)
 {
     cancelBackTranslation();
+    cancelBackResize();
     auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &candidate) {
         return candidate.id == id;
     });
@@ -169,6 +171,7 @@ bool TextDepth::handleSetUnitShadowGradient(const QUuid &id, ShadowGradient stop
 bool TextDepth::beginBackTranslation(const QUuid &id)
 {
     cancelBackTranslation();
+    cancelBackResize();
     const auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
     if (unit == m_units.end() || !unit->backVisible || unit->front.vectorMaskData.isEmpty())
         return false;
@@ -214,6 +217,71 @@ void TextDepth::cancelBackTranslation()
         if (unit.id == m_backTranslation->id)
             unit.back2FrontRelativePos = m_backTranslation->originalPosition;
     m_backTranslation.reset();
+    emit backPreviewChanged({});
+}
+
+bool TextDepth::beginBackResize(const QUuid &id)
+{
+    cancelBackTranslation();
+    cancelBackResize();
+    const auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
+    if (unit == m_units.end() || !unit->backVisible || unit->front.vectorMaskData.isEmpty())
+        return false;
+    const auto bounds = unit->front.vectorMaskData.boundingRect();
+    if (bounds.width() <= 0 || bounds.height() <= 0) return false;
+    m_backResize = BackResize{id, unit->back2FrontRelativeSize};
+    resizeBack(id, {});
+    return true;
+}
+
+void TextDepth::resizeBack(const QUuid &id, QPointF delta)
+{
+    if (!m_backResize || m_backResize->id != id ||
+        !std::isfinite(delta.x()) || !std::isfinite(delta.y())) return;
+    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
+    if (unit == m_units.end()) return;
+    const auto bounds = unit->front.vectorMaskData.boundingRect();
+    // Project the drag onto the front's diagonal to change one uniform scale.
+    // The shorter axis sets the minimum so neither dimension falls below 30px.
+    const qreal width = bounds.width();
+    const qreal height = bounds.height();
+    const qreal minimumScale = std::min(qreal(1), qreal(30) / std::min(width, height));
+    const qreal originalScale = std::min(m_backResize->originalSize.x(),
+                                         m_backResize->originalSize.y());
+    const qreal scaleDelta = (delta.x() * width + delta.y() * height)
+                            / (width * width + height * height);
+    const qreal scale = std::clamp(originalScale + scaleDelta, minimumScale, qreal(1));
+    unit->back2FrontRelativeSize = {scale, scale};
+    emit backPreviewChanged({id, backWireframe(unit->front, unit->back2FrontRelativePos,
+                                             unit->back2FrontRelativeSize)});
+}
+
+void TextDepth::finishBackResize(const QUuid &id)
+{
+    if (!m_backResize || m_backResize->id != id) return;
+    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
+    if (unit == m_units.end()) { cancelBackResize(); return; }
+    try {
+        if (unit->back2FrontRelativeSize != m_backResize->originalSize)
+            unit->back = generateBack(unit->front, QSize(m_width, m_height),
+                                      unit->back2FrontRelativePos, unit->back2FrontRelativeSize);
+    } catch (const std::exception &error) {
+        cancelBackResize();
+        emit unitEditFailed(tr("Could not resize back: %1").arg(QString::fromUtf8(error.what())));
+        return;
+    }
+    m_backResize.reset();
+    emit backPreviewChanged({});
+    publishQtData();
+}
+
+void TextDepth::cancelBackResize()
+{
+    if (!m_backResize) return;
+    for (auto &unit : m_units)
+        if (unit.id == m_backResize->id)
+            unit.back2FrontRelativeSize = m_backResize->originalSize;
+    m_backResize.reset();
     emit backPreviewChanged({});
 }
 

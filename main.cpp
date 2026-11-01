@@ -59,6 +59,10 @@ int main(int argc, char *argv[])
     QObject::connect(&unitProperties, &UnitPropertiesModel::translationChanged, &backend, &TextDepth::translateBack);
     QObject::connect(&unitProperties, &UnitPropertiesModel::translationFinished, &backend, &TextDepth::finishBackTranslation);
     QObject::connect(&unitProperties, &UnitPropertiesModel::translationCanceled, &backend, &TextDepth::cancelBackTranslation);
+    QObject::connect(&unitProperties, &UnitPropertiesModel::resizeStarted, &backend, &TextDepth::beginBackResize);
+    QObject::connect(&unitProperties, &UnitPropertiesModel::resizeChanged, &backend, &TextDepth::resizeBack);
+    QObject::connect(&unitProperties, &UnitPropertiesModel::resizeFinished, &backend, &TextDepth::finishBackResize);
+    QObject::connect(&unitProperties, &UnitPropertiesModel::resizeCanceled, &backend, &TextDepth::cancelBackResize);
     QObject::connect(&backend, &TextDepth::backPreviewChanged, &frontend, &TextDepthViewport::handleBackPreview);
 
     QObject::connect(

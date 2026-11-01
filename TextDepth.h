@@ -114,6 +114,11 @@ public:
     void finishBackTranslation(const QUuid &id);
     void cancelBackTranslation();
 
+    bool beginBackResize(const QUuid &id);
+    void resizeBack(const QUuid &id, QPointF delta);
+    void finishBackResize(const QUuid &id);
+    void cancelBackResize();
+
     Q_INVOKABLE bool loadPsd(const QUrl &fileUrl);
 
     // void paint(QPainter *painter) override;
@@ -143,6 +148,8 @@ private:
     TextDepthUnits m_units;
     struct BackTranslation { QUuid id; QPointF originalPosition; };
     std::optional<BackTranslation> m_backTranslation;
+    struct BackResize { QUuid id; QPointF originalSize; };
+    std::optional<BackResize> m_backResize;
 
     struct TextLayerData
     {

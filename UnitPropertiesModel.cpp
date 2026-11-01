@@ -24,7 +24,7 @@ void UnitPropertiesModel::setUnits(const RenderedTextDepthUnits &units)
         const bool hasGeometry = !path.isEmpty() && bounds.width() > 0 && bounds.height() > 0;
         m_states.push_back({unit.id, unit.back.has_value(), unit.backAvailable || hasGeometry, hasGeometry, unit.shadowGradient});
     }
-    if (!canMoveBack()) cancelTranslation();
+    if (!canMoveBack()) { cancelTranslation(); cancelResize(); }
     emit stateChanged();
 }
 
@@ -33,6 +33,7 @@ void UnitPropertiesModel::selectUnit(const QUuid &id)
     if (m_selection == id)
         return;
     cancelTranslation();
+    cancelResize();
     m_selection = id;
     m_selectedStop = {};
     emit stateChanged();
@@ -48,6 +49,7 @@ void UnitPropertiesModel::requestToggleBack()
 bool UnitPropertiesModel::beginTranslation()
 {
     cancelTranslation();
+    cancelResize();
     if (!canMoveBack()) return false;
     m_dragUnit = m_selection;
     emit translationStarted(m_dragUnit);
@@ -71,6 +73,35 @@ void UnitPropertiesModel::cancelTranslation()
     if (m_dragUnit.isNull()) return;
     m_dragUnit = {};
     emit translationCanceled();
+}
+
+bool UnitPropertiesModel::beginResize()
+{
+    cancelTranslation();
+    cancelResize();
+    if (!canMoveBack()) return false;
+    m_resizeUnit = m_selection;
+    emit resizeStarted(m_resizeUnit);
+    return true;
+}
+
+void UnitPropertiesModel::resizeBack(QPointF delta)
+{
+    if (!m_resizeUnit.isNull()) emit resizeChanged(m_resizeUnit, delta);
+}
+
+void UnitPropertiesModel::finishResize()
+{
+    const auto id = m_resizeUnit;
+    m_resizeUnit = {};
+    if (!id.isNull()) emit resizeFinished(id);
+}
+
+void UnitPropertiesModel::cancelResize()
+{
+    if (m_resizeUnit.isNull()) return;
+    m_resizeUnit = {};
+    emit resizeCanceled();
 }
 
 const GradientStop *UnitPropertiesModel::selectedStop() const

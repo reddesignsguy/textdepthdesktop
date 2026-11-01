@@ -243,6 +243,44 @@ int main(int argc, char **argv)
     check(!backend.beginBackTranslation(movable[1].id), "hidden back cannot be dragged");
     check(previews >= 5, "translation preview lifecycle");
 
+    TextDepthUnits resizable(2);
+    resizable[0].front.vectorMaskData.addRect(10, 10, 100, 60);
+    resizable[1].front.vectorMaskData.addRect(10, 10, 20, 10);
+    backend.setUnits(resizable);
+    const auto resizeId = resizable[0].id;
+    backend.handleToggleUnitVisibility(resizeId);
+    const auto resizeCache = backend.units()[0].back->baseLayer;
+    const int beforeResize = publications;
+    check(backend.beginBackResize(resizeId), "visible back can resize");
+    backend.resizeBack(resizeId, {-1000, 1000});
+    check(backend.units()[0].back2FrontRelativeSize == QPointF(.5, .5), "uniform scale keeps shorter axis at 30px");
+    check(backend.units()[0].back->baseLayer == resizeCache && publications == beforeResize, "resize uses preview until release");
+    backend.resizeBack(resizeId, {1000, 1000});
+    check(backend.units()[0].back2FrontRelativeSize == QPointF(1, 1), "uniform scale cannot exceed front size");
+    backend.resizeBack(resizeId, {10, 0});
+    auto scale = backend.units()[0].back2FrontRelativeSize;
+    check(scale.x() == scale.y() && qFuzzyCompare(scale.x(), .8 + 1000.0 / 13600), "horizontal drag scales both axes from original size");
+    backend.resizeBack(resizeId, {0, 10});
+    scale = backend.units()[0].back2FrontRelativeSize;
+    check(scale.x() == scale.y() && qFuzzyCompare(scale.x(), .8 + 600.0 / 13600), "vertical drag scales both axes from original size");
+    backend.resizeBack(resizeId, {10, 6});
+    scale = backend.units()[0].back2FrontRelativeSize;
+    check(scale.x() == scale.y() && qFuzzyCompare(scale.x(), .9), "diagonal drag scales proportionally");
+    check(backend.units()[0].back2FrontRelativePos == resizable[0].back2FrontRelativePos, "resize preserves back center");
+    backend.cancelBackResize();
+    check(backend.units()[0].back2FrontRelativeSize == QPointF(.8, .8) && preview.unitId.isNull(), "resize cancellation restores size");
+    backend.beginBackResize(resizeId);
+    backend.resizeBack(resizeId, {-1000, -1000});
+    backend.finishBackResize(resizeId);
+    check(backend.units()[0].back2FrontRelativeSize == QPointF(.5, .5), "release commits proportional minimum dimensions");
+    check(backend.units()[0].back->baseLayer != resizeCache && preview.unitId.isNull(), "release regenerates back and clears preview");
+    check(!backend.beginBackResize(resizable[1].id), "hidden back cannot resize");
+    backend.handleToggleUnitVisibility(resizable[1].id);
+    backend.beginBackResize(resizable[1].id);
+    backend.resizeBack(resizable[1].id, {-1000, 1000});
+    check(backend.units()[1].back2FrontRelativeSize == QPointF(1, 1), "tiny fronts take priority over 30px minimum");
+    backend.cancelBackResize();
+
     // Gradient mapping preserves coverage and maps black/gray/white to RGB.
     QImage tones(3, 1, QImage::Format_ARGB32);
     tones.setPixelColor(0, 0, QColor(0, 0, 0, 255));
