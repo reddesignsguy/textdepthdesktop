@@ -168,14 +168,72 @@ bool TextDepth::handleSetUnitShadowGradient(const QUuid &id, ShadowGradient stop
     return true;
 }
 
+void TextDepth::setSynchronizeLayers(bool enabled)
+{
+    if (m_synchronizeLayers == enabled) return;
+    cancelBackTranslation();
+    cancelBackResize();
+    m_synchronizeLayers = enabled;
+    emit synchronizeLayersChanged();
+}
+
+TextDepth::BackTransform TextDepth::captureTransform(const QUuid &id) const
+{
+    BackTransform result{id, {}, {}};
+    for (const auto &unit : m_units) {
+        const auto bounds = unit.front.vectorMaskData.boundingRect();
+        if ((!m_synchronizeLayers && unit.id != id) || bounds.isEmpty()) continue;
+        result.originals.push_back({unit.id, unit.back2FrontRelativePos, unit.back2FrontRelativeSize});
+        result.bounds = result.bounds.united(backOutline(unit.front, unit.back2FrontRelativePos,
+                                                        unit.back2FrontRelativeSize).boundingRect());
+    }
+    return result;
+}
+
+void TextDepth::previewTransform(const BackTransform &transform)
+{
+    BackPreview preview;
+    preview.unitId = transform.id;
+    for (const auto &original : transform.originals) {
+        const auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == original.id; });
+        if (unit == m_units.end() || !unit->backVisible) continue;
+        auto path = backWireframe(unit->front, unit->back2FrontRelativePos, unit->back2FrontRelativeSize);
+        preview.wireframes.insert(unit->id, path);
+        if (unit->id == transform.id) preview.wireframe = path;
+    }
+    emit backPreviewChanged(preview);
+}
+
+void TextDepth::restoreTransform(const BackTransform &transform)
+{
+    for (const auto &original : transform.originals)
+        for (auto &unit : m_units)
+            if (unit.id == original.id) {
+                unit.back2FrontRelativePos = original.position;
+                unit.back2FrontRelativeSize = original.size;
+            }
+}
+
+void TextDepth::commitTransform(const BackTransform &transform)
+{
+    // Generate everything before replacing any caches, so failures are atomic.
+    std::vector<std::pair<TextDepthUnit *, Back>> generated;
+    for (const auto &original : transform.originals)
+        for (auto &unit : m_units)
+            if (unit.id == original.id && (unit.back || unit.backVisible) &&
+                (unit.back2FrontRelativePos != original.position || unit.back2FrontRelativeSize != original.size))
+                generated.emplace_back(&unit, generateBack(unit.front, QSize(m_width, m_height),
+                                        unit.back2FrontRelativePos, unit.back2FrontRelativeSize));
+    for (auto &entry : generated) entry.first->back = std::move(entry.second);
+}
+
 bool TextDepth::beginBackTranslation(const QUuid &id)
 {
     cancelBackTranslation();
     cancelBackResize();
     const auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
-    if (unit == m_units.end() || !unit->backVisible || unit->front.vectorMaskData.isEmpty())
-        return false;
-    m_backTranslation = BackTranslation{id, unit->back2FrontRelativePos};
+    if (unit == m_units.end() || !unit->backVisible || unit->front.vectorMaskData.boundingRect().isEmpty()) return false;
+    m_backTranslation = captureTransform(id);
     translateBack(id, {});
     return true;
 }
@@ -184,23 +242,17 @@ void TextDepth::translateBack(const QUuid &id, QPointF delta)
 {
     if (!m_backTranslation || m_backTranslation->id != id ||
         !std::isfinite(delta.x()) || !std::isfinite(delta.y())) return;
-    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
-    if (unit == m_units.end()) return;
-    unit->back2FrontRelativePos = m_backTranslation->originalPosition + delta;
-    emit backPreviewChanged({id, backWireframe(unit->front, unit->back2FrontRelativePos,
-                                             unit->back2FrontRelativeSize)});
+    for (const auto &original : m_backTranslation->originals)
+        for (auto &unit : m_units)
+            if (unit.id == original.id) unit.back2FrontRelativePos = original.position + delta;
+    previewTransform(*m_backTranslation);
 }
 
 void TextDepth::finishBackTranslation(const QUuid &id)
 {
     if (!m_backTranslation || m_backTranslation->id != id) return;
-    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
-    if (unit == m_units.end()) { cancelBackTranslation(); return; }
-    try {
-        if (unit->back2FrontRelativePos != m_backTranslation->originalPosition)
-            unit->back = generateBack(unit->front, QSize(m_width, m_height),
-                                      unit->back2FrontRelativePos, unit->back2FrontRelativeSize);
-    } catch (const std::exception &error) {
+    try { commitTransform(*m_backTranslation); }
+    catch (const std::exception &error) {
         cancelBackTranslation();
         emit unitEditFailed(tr("Could not move back: %1").arg(QString::fromUtf8(error.what())));
         return;
@@ -213,9 +265,7 @@ void TextDepth::finishBackTranslation(const QUuid &id)
 void TextDepth::cancelBackTranslation()
 {
     if (!m_backTranslation) return;
-    for (auto &unit : m_units)
-        if (unit.id == m_backTranslation->id)
-            unit.back2FrontRelativePos = m_backTranslation->originalPosition;
+    restoreTransform(*m_backTranslation);
     m_backTranslation.reset();
     emit backPreviewChanged({});
 }
@@ -225,11 +275,8 @@ bool TextDepth::beginBackResize(const QUuid &id)
     cancelBackTranslation();
     cancelBackResize();
     const auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
-    if (unit == m_units.end() || !unit->backVisible || unit->front.vectorMaskData.isEmpty())
-        return false;
-    const auto bounds = unit->front.vectorMaskData.boundingRect();
-    if (bounds.width() <= 0 || bounds.height() <= 0) return false;
-    m_backResize = BackResize{id, unit->back2FrontRelativeSize};
+    if (unit == m_units.end() || !unit->backVisible || unit->front.vectorMaskData.boundingRect().isEmpty()) return false;
+    m_backResize = captureTransform(id);
     resizeBack(id, {});
     return true;
 }
@@ -238,34 +285,41 @@ void TextDepth::resizeBack(const QUuid &id, QPointF delta)
 {
     if (!m_backResize || m_backResize->id != id ||
         !std::isfinite(delta.x()) || !std::isfinite(delta.y())) return;
-    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
-    if (unit == m_units.end()) return;
-    const auto bounds = unit->front.vectorMaskData.boundingRect();
-    // Project the drag onto the front's diagonal to change one uniform scale.
-    // The shorter axis sets the minimum so neither dimension falls below 30px.
-    const qreal width = bounds.width();
-    const qreal height = bounds.height();
-    const qreal minimumScale = std::min(qreal(1), qreal(30) / std::min(width, height));
-    const qreal originalScale = std::min(m_backResize->originalSize.x(),
-                                         m_backResize->originalSize.y());
-    const qreal scaleDelta = (delta.x() * width + delta.y() * height)
-                            / (width * width + height * height);
-    const qreal scale = std::clamp(originalScale + scaleDelta, minimumScale, qreal(1));
-    unit->back2FrontRelativeSize = {scale, scale};
-    emit backPreviewChanged({id, backWireframe(unit->front, unit->back2FrontRelativePos,
-                                             unit->back2FrontRelativeSize)});
+    const auto &transform = *m_backResize;
+    const qreal width = transform.bounds.width(), height = transform.bounds.height();
+    if (width <= 0 || height <= 0) return;
+    qreal maximumFactor = std::numeric_limits<qreal>::max();
+    for (const auto &original : transform.originals)
+        maximumFactor = std::min(maximumFactor, 1 / std::max(original.size.x(), original.size.y()));
+    const qreal minimumFactor = std::min(maximumFactor, 30 / std::min(width, height));
+    const qreal factor = std::clamp(1 + (delta.x() * width + delta.y() * height) /
+                                         (width * width + height * height), minimumFactor, maximumFactor);
+    for (const auto &original : transform.originals)
+        for (auto &unit : m_units) {
+            if (unit.id != original.id) continue;
+            if (!m_synchronizeLayers || transform.originals.size() == 1) {
+                const auto bounds = unit.front.vectorMaskData.boundingRect();
+                const qreal w = bounds.width(), h = bounds.height();
+                const qreal scale = std::clamp(std::min(original.size.x(), original.size.y()) +
+                    (delta.x() * w + delta.y() * h) / (w * w + h * h),
+                    std::min(qreal(1), 30 / std::min(w, h)), qreal(1));
+                unit.back2FrontRelativeSize = {scale, scale};
+            } else {
+                const auto center = unit.front.vectorMaskData.boundingRect().center();
+                // Scaling around the group's center also moves each layer's center.
+                unit.back2FrontRelativePos = transform.bounds.center() +
+                    (center + original.position - transform.bounds.center()) * factor - center;
+                unit.back2FrontRelativeSize = original.size * factor;
+            }
+        }
+    previewTransform(transform);
 }
 
 void TextDepth::finishBackResize(const QUuid &id)
 {
     if (!m_backResize || m_backResize->id != id) return;
-    auto unit = std::find_if(m_units.begin(), m_units.end(), [&](const auto &u) { return u.id == id; });
-    if (unit == m_units.end()) { cancelBackResize(); return; }
-    try {
-        if (unit->back2FrontRelativeSize != m_backResize->originalSize)
-            unit->back = generateBack(unit->front, QSize(m_width, m_height),
-                                      unit->back2FrontRelativePos, unit->back2FrontRelativeSize);
-    } catch (const std::exception &error) {
+    try { commitTransform(*m_backResize); }
+    catch (const std::exception &error) {
         cancelBackResize();
         emit unitEditFailed(tr("Could not resize back: %1").arg(QString::fromUtf8(error.what())));
         return;
@@ -278,9 +332,7 @@ void TextDepth::finishBackResize(const QUuid &id)
 void TextDepth::cancelBackResize()
 {
     if (!m_backResize) return;
-    for (auto &unit : m_units)
-        if (unit.id == m_backResize->id)
-            unit.back2FrontRelativeSize = m_backResize->originalSize;
+    restoreTransform(*m_backResize);
     m_backResize.reset();
     emit backPreviewChanged({});
 }

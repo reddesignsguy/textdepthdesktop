@@ -205,6 +205,8 @@ int main(int argc, char **argv)
     wireframe.setColor(Qt::darkGreen);
     check(wireframe.geometry()->vertexData() == vertices, "pulse reuses geometry");
 
+    check(backend.synchronizeLayers(), "synchronization defaults on");
+    backend.setSynchronizeLayers(false);
     // A translation emits only lightweight previews until release.
     TextDepthUnits movable(2);
     movable[0].front.vectorMaskData.addRect(10, 10, 30, 30);
@@ -280,6 +282,50 @@ int main(int argc, char **argv)
     backend.resizeBack(resizable[1].id, {-1000, 1000});
     check(backend.units()[1].back2FrontRelativeSize == QPointF(1, 1), "tiny fronts take priority over 30px minimum");
     backend.cancelBackResize();
+
+    // A shared affine transform must preserve spacing and include hidden layers.
+    TextDepthUnits grouped(3);
+    grouped[0].front.vectorMaskData.addRect(0, 0, 100, 60);
+    grouped[1].front.vectorMaskData.addRect(200, 100, 50, 40);
+    grouped[2].front.vectorMaskData.addRect(300, 20, 20, 20);
+    backend.setUnits(grouped);
+    backend.handleToggleUnitVisibility(grouped[0].id);
+    backend.handleToggleUnitVisibility(grouped[1].id);
+    backend.setSynchronizeLayers(true);
+    backend.beginBackTranslation(grouped[0].id);
+    backend.translateBack(grouped[0].id, {15, -10});
+    for (int i = 0; i < 3; ++i)
+        check(backend.units()[i].back2FrontRelativePos == grouped[i].back2FrontRelativePos + QPointF(15, -10), "group translation includes hidden layers");
+    check(preview.wireframes.size() == 2, "all visible layers have individual previews");
+    backend.cancelBackTranslation();
+    for (int i = 0; i < 3; ++i)
+        check(backend.units()[i].back2FrontRelativePos == grouped[i].back2FrontRelativePos, "group cancellation restores all positions");
+    QRectF groupBounds;
+    for (const auto &unit : grouped)
+        groupBounds = groupBounds.united(backOutline(unit.front, unit.back2FrontRelativePos, unit.back2FrontRelativeSize).boundingRect());
+    backend.beginBackResize(grouped[0].id);
+    backend.resizeBack(grouped[0].id, {-groupBounds.width() * .1, -groupBounds.height() * .1});
+    QTransform expected;
+    expected.translate(groupBounds.center().x(), groupBounds.center().y());
+    expected.scale(.9, .9);
+    expected.translate(-groupBounds.center().x(), -groupBounds.center().y());
+    for (int i = 0; i < 3; ++i) {
+        const auto before = backOutline(grouped[i].front, grouped[i].back2FrontRelativePos, grouped[i].back2FrontRelativeSize);
+        const auto &unit = backend.units()[i];
+        const auto after = backOutline(unit.front, unit.back2FrontRelativePos, unit.back2FrontRelativeSize);
+        check(QLineF(after.boundingRect().topLeft(), expected.map(before).boundingRect().topLeft()).length() < 1e-8, "group resize shares one pivot");
+        check(qFuzzyCompare(unit.back2FrontRelativeSize.x(), .72), "group resize shares one scale factor");
+    }
+    backend.finishBackResize(grouped[0].id);
+    check(!backend.units()[2].back && !backend.units()[2].backVisible, "hidden uncached layers stay hidden");
+    const auto committedGroup = backend.units();
+    backend.beginBackResize(grouped[0].id);
+    backend.resizeBack(grouped[0].id, {10, 10});
+    backend.setSynchronizeLayers(false);
+    for (int i = 0; i < 3; ++i) {
+        check(backend.units()[i].back2FrontRelativePos == committedGroup[i].back2FrontRelativePos, "option change cancels group position changes");
+        check(backend.units()[i].back2FrontRelativeSize == committedGroup[i].back2FrontRelativeSize, "option change cancels group size changes");
+    }
 
     // Gradient mapping preserves coverage and maps black/gray/white to RGB.
     QImage tones(3, 1, QImage::Format_ARGB32);

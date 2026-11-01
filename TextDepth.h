@@ -18,6 +18,7 @@
 class TextDepth : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool synchronizeLayers READ synchronizeLayers WRITE setSynchronizeLayers NOTIFY synchronizeLayersChanged)
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
 
 
@@ -109,6 +110,8 @@ public:
     bool handleToggleUnitVisibility(const QUuid &id);
     RenderedTextDepthUnits renderedUnits() const;
     bool handleSetUnitShadowGradient(const QUuid &id, ShadowGradient stops);
+    bool synchronizeLayers() const { return m_synchronizeLayers; }
+    void setSynchronizeLayers(bool enabled);
     bool beginBackTranslation(const QUuid &id);
     void translateBack(const QUuid &id, QPointF delta);
     void finishBackTranslation(const QUuid &id);
@@ -135,6 +138,7 @@ public slots:
     Q_INVOKABLE void writeToPhotoshop();
 
 signals:
+    void synchronizeLayersChanged();
     void backPreviewChanged(const BackPreview &preview);
     void unitEditFailed(const QString &message);
     void psdLoadFailed(const QString &message);
@@ -146,10 +150,19 @@ private:
     int m_width;
     int m_height;
     TextDepthUnits m_units;
-    struct BackTranslation { QUuid id; QPointF originalPosition; };
-    std::optional<BackTranslation> m_backTranslation;
-    struct BackResize { QUuid id; QPointF originalSize; };
-    std::optional<BackResize> m_backResize;
+    bool m_synchronizeLayers = true;
+    struct TransformState { QUuid id; QPointF position; QPointF size; };
+    struct BackTransform {
+        QUuid id;
+        std::vector<TransformState> originals;
+        QRectF bounds;
+    };
+    std::optional<BackTransform> m_backTranslation;
+    std::optional<BackTransform> m_backResize;
+    BackTransform captureTransform(const QUuid &id) const;
+    void previewTransform(const BackTransform &transform);
+    void restoreTransform(const BackTransform &transform);
+    void commitTransform(const BackTransform &transform);
 
     struct TextLayerData
     {

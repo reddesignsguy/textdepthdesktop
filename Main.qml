@@ -168,6 +168,11 @@ Window {
                 Layout.maximumWidth: Layout.preferredWidth
                 Layout.fillHeight: true
                 spacing: 8
+                GlobalOptionsPanel {
+                    Layout.fillWidth: true
+                    backend: textDepthBackend
+                    propertiesModel: unitPropertiesModel
+                }
                 LayersPanel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true

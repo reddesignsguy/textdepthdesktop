@@ -36,6 +36,5 @@ private:
         WireframeNode *wireframe;
     };
     std::vector<UnitNodes> m_units;
-    WireframeNode *m_activeWireframe = nullptr;
 };
 #endif

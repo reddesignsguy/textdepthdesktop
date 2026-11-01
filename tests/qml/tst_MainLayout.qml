@@ -12,6 +12,13 @@ TestCase {
         verify(window !== null)
         const viewport = findChild(window, "documentViewport")
         const sidebar = findChild(window, "editorSidebar")
+        const synchronize = findChild(window, "synchronizeLayersCheckBox")
+        verify(synchronize !== null)
+        verify(synchronize.checked)
+        mouseClick(synchronize)
+        compare(textDepthBackend.synchronizeLayers, false)
+        mouseClick(synchronize)
+        compare(textDepthBackend.synchronizeLayers, true)
         tryCompare(sidebar, "width", 300)
         tryVerify(function() { return viewport.width > 600 }, 2000,
                   "Viewport width: " + viewport.width + ", row width: " + viewport.parent.width)

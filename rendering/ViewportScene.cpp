@@ -59,7 +59,6 @@ std::vector<UnitImages> prepareUnitImages(const RenderedTextDepthUnits &units)
 
 void ViewportScene::setUnits(QQuickWindow *window, const std::vector<UnitImages> &units)
 {
-    m_activeWireframe = nullptr;
     m_units.clear();
     while (auto *child = firstChild()) {
         removeChildNode(child);
@@ -83,14 +82,12 @@ void ViewportScene::setUnits(QQuickWindow *window, const std::vector<UnitImages>
 
 void ViewportScene::setPreview(const BackPreview &preview, qreal width)
 {
-    m_activeWireframe = nullptr;
     for (auto &unit : m_units) {
-        const bool active = !preview.unitId.isNull() && unit.id == preview.unitId;
+        const bool active = !preview.unitId.isNull() && (preview.wireframes.contains(unit.id) || (preview.wireframes.isEmpty() && unit.id == preview.unitId));
         unit.back->setOpacity(active ? 0 : 1);
         unit.preview->setOpacity(active ? 1 : 0);
         if (active) {
-            unit.wireframe->setPath(preview.wireframe, width);
-            m_activeWireframe = unit.wireframe;
+            unit.wireframe->setPath(preview.wireframes.value(unit.id, preview.wireframe), width);
         } else if (unit.wireframe->geometry()->vertexCount() != 0) {
             unit.wireframe->setPath({}, width);
         }
@@ -99,5 +96,6 @@ void ViewportScene::setPreview(const BackPreview &preview, qreal width)
 
 void ViewportScene::setPreviewColor(QColor color)
 {
-    if (m_activeWireframe) m_activeWireframe->setColor(color);
+    for (auto &unit : m_units)
+        if (unit.preview->opacity() > 0) unit.wireframe->setColor(color);
 }
