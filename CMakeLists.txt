@@ -76,6 +76,10 @@ install(TARGETS appTextDepthOG
 option(TEXTDEPTH_BUILD_TESTS "Build PSD loading regression tests" OFF)
 if(TEXTDEPTH_BUILD_TESTS)
     enable_testing()
+    qt_add_executable(textdepth_back_generation_test tests/back_generation.cpp)
+    target_include_directories(textdepth_back_generation_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(textdepth_back_generation_test PRIVATE Qt6::Gui)
+    add_test(NAME back_generation COMMAND textdepth_back_generation_test)
     qt_add_executable(textdepth_psd_loading_test
         tests/psd_loading.cpp
         LayerUIModel.h LayerUIModel.cpp

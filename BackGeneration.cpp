@@ -1,5 +1,8 @@
 #include "BackGeneration.h"
 #include <QLineF>
+#include <QPainter>
+#include <QPolygonF>
+#include <limits>
 #include <QVector2D>
 #include <QtMath>
 #include <QDebug>
@@ -298,145 +301,90 @@ std::vector<Quad> createFrontAndBackConnection(QPainterPath front, QPainterPath 
     return quads;
 }
 
-QImage createBackLayerBase(const std::vector<Quad> quads, int width, int height, const QColor & color)
+// Resolve coverage only after every plane has been drawn. Antialiasing each
+// quad separately would leave translucent seams along shared Bezier segments.
+// Bands bound temporary memory independently of the canvas height.
+template <typename PlaneColor>
+QImage rasterizeBackPlanes(const std::vector<Quad> &quads, int width, int height,
+                          PlaneColor planeColor)
 {
+    constexpr int samples = 4;
+    constexpr int bandHeight = 32;
+    constexpr int sampleCount = samples * samples;
+    if (width <= 0 || height <= 0 || width > std::numeric_limits<int>::max() / samples)
+        throw std::invalid_argument("Invalid back layer dimensions.");
     QImage image(width, height, QImage::Format_ARGB32);
-    if (image.isNull()) throw std::runtime_error("Could not allocate back layers.");
-    image.fill(Qt::transparent);
-    for (int i = 0; i < quads.size(); i++)
-    {
-        auto quad = quads[i];
+    QImage band(width * samples, bandHeight * samples, QImage::Format_ARGB32_Premultiplied);
+    if (image.isNull() || band.isNull())
+        throw std::runtime_error("Could not allocate back layers.");
 
-        const QPointF &frontP1 = quad.front1;
-        const QPointF &frontP2 = quad.front2;
-
-        const auto &points = quad.getPoints();
-        qreal minY = points[0].y();
-        qreal maxY = points[0].y();
-
-        for (const QPointF &p : points)
+    struct Plane {
+        QPolygonF polygon;
+        QRectF bounds;
+        QColor color;
+    };
+    std::vector<Plane> planes;
+    planes.reserve(quads.size());
+    for (const auto &quad : quads) {
+        QPolygonF polygon{quad.front1, quad.front2, quad.back2, quad.back1};
+        planes.push_back({polygon, polygon.boundingRect(), planeColor(quad)});
+    }
+    for (int top = 0; top < height; top += bandHeight) {
+        const int rows = std::min(bandHeight, height - top);
+        band.fill(Qt::transparent);
         {
-            minY = qMin(minY, p.y());
-            maxY = qMax(maxY, p.y());
-        }
-        int startY = qMax(0, static_cast<int>(qFloor(minY)));
-        int endY = qMin(height - 1, static_cast<int>(qCeil(maxY)));
-
-        // DRAWING ALGORITHM
-        // For each "scanline", a horizontal line that goes down the screen every 1 pixel,
-        // This loop scales in time complexity based on the text height
-        for (int y = startY; y <= endY; ++y)
-        {
-            std::vector<qreal> intersections;
-
-            for (auto edge : quad.getEdges())
-            {
-                const QPointF &p1 = edge.first;
-                const QPointF &p2 = edge.second;
-
-                if ((p1.y() <= y && p2.y() > y) || (p2.y() <= y && p1.y() > y))
-                {
-                    // Calculate x intersection
-                    qreal t = (y - p1.y()) / (p2.y() - p1.y());
-                    qreal x = p1.x() + t * (p2.x() - p1.x());
-                    intersections.push_back(x);
-                }
+            QPainter painter(&band);
+            painter.setRenderHint(QPainter::Antialiasing, false);
+            // Preserve the existing visibility order: the last plane owns each
+            // covered sample. Shared edges never accumulate alpha.
+            painter.setCompositionMode(QPainter::CompositionMode_Source);
+            painter.setPen(Qt::NoPen);
+            painter.scale(samples, samples);
+            painter.translate(0, -top);
+            for (const auto &plane : planes) {
+                if (plane.bounds.bottom() < top || plane.bounds.top() >= top + rows)
+                    continue;
+                painter.setBrush(plane.color);
+                painter.drawPolygon(plane.polygon, Qt::OddEvenFill);
             }
-
-            // Sort intersections
-            std::sort(intersections.begin(), intersections.end());
-
-            // Fill between pairs of intersections
-            for (int i = 0; i + 1 < intersections.size(); i += 2)
-            {
-                double intersect1 = intersections[i];
-                double intersect2 = intersections[i + 1];
-                int startX = qMax(0, static_cast<int>(qFloor(intersect1)));
-                int endX = qMin(width - 1, static_cast<int>(qFloor(intersect2)));
-
-                for (int x = startX; x <= endX; ++x)
-                {
-                    image.setPixelColor(x, y, color);
+        }
+        for (int y = 0; y < rows; ++y) {
+            auto *output = reinterpret_cast<QRgb *>(image.scanLine(top + y));
+            for (int x = 0; x < width; ++x) {
+                int red = 0, green = 0, blue = 0, alpha = 0;
+                for (int sy = 0; sy < samples; ++sy) {
+                    const auto *input = reinterpret_cast<const QRgb *>(band.constScanLine(y * samples + sy));
+                    for (int sx = 0; sx < samples; ++sx) {
+                        const QRgb pixel = input[x * samples + sx];
+                        red += qRed(pixel);
+                        green += qGreen(pixel);
+                        blue += qBlue(pixel);
+                        alpha += qAlpha(pixel);
+                    }
                 }
+                // Average premultiplied values so transparent samples affect
+                // coverage without darkening the silhouette's RGB values.
+                const auto average = [](int sum) { return (sum + sampleCount / 2) / sampleCount; };
+                output[x] = qUnpremultiply(qRgba(average(red), average(green),
+                                                average(blue), average(alpha)));
             }
         }
     }
     return image;
 }
 
-QImage createBackLayerShadows(const std::vector<Quad> quads, int width, int height)
+QImage createBackLayerBase(const std::vector<Quad> &quads, int width, int height, const QColor &color)
 {
-    QImage image(width, height, QImage::Format_ARGB32);
-    if (image.isNull()) throw std::runtime_error("Could not allocate back layers.");
-    image.fill(Qt::transparent);
-    for (int i = 0; i < quads.size(); i++)
-    {
-        auto quad = quads[i];
+    return rasterizeBackPlanes(quads, width, height, [&color](const Quad &) { return color; });
+}
 
-        const QPointF &frontP1 = quad.front1;
-        const QPointF &frontP2 = quad.front2;
-
-        // =========== THIS IS WHAT MAKES THIS FUNCTION SPECIAL ==============
-        // Alpha value calculations for the core shadow "lo" layer
-        int interpolatedCoreShadowLoOpacity = calculateCoreShadowLoOpacityFromAngle(frontP1, frontP2);
-        interpolatedCoreShadowLoOpacity = 255 - interpolatedCoreShadowLoOpacity;
-        // Store lighting in intensity, leaving alpha exclusively for coverage.
-        const int intensity = 255 - interpolatedCoreShadowLoOpacity;
-        const QColor interpolatedCoreShadowLoColor(intensity, intensity, intensity);
-        // ===================================================================
-
-        const auto &points = quad.getPoints();
-        qreal minY = points[0].y();
-        qreal maxY = points[0].y();
-
-        for (const QPointF &p : points)
-        {
-            minY = qMin(minY, p.y());
-            maxY = qMax(maxY, p.y());
-        }
-        int startY = qMax(0, static_cast<int>(qFloor(minY)));
-        int endY = qMin(height - 1, static_cast<int>(qCeil(maxY)));
-
-        // DRAWING ALGORITHM
-        // For each "scanline", a horizontal line that goes down the screen every 1 pixel,
-        // This loop scales in time complexity based on the text height
-        for (int y = startY; y <= endY; ++y)
-        {
-            std::vector<qreal> intersections;
-
-            for (auto edge : quad.getEdges())
-            {
-                const QPointF &p1 = edge.first;
-                const QPointF &p2 = edge.second;
-
-                if ((p1.y() <= y && p2.y() > y) || (p2.y() <= y && p1.y() > y))
-                {
-                    // Calculate x intersection
-                    qreal t = (y - p1.y()) / (p2.y() - p1.y());
-                    qreal x = p1.x() + t * (p2.x() - p1.x());
-                    intersections.push_back(x);
-                }
-            }
-
-            // Sort intersections
-            std::sort(intersections.begin(), intersections.end());
-
-            // Fill between pairs of intersections
-            for (int i = 0; i + 1 < intersections.size(); i += 2)
-            {
-                double intersect1 = intersections[i];
-                double intersect2 = intersections[i + 1];
-                int startX = qMax(0, static_cast<int>(qFloor(intersect1)));
-                int endX = qMin(width - 1, static_cast<int>(qFloor(intersect2)));
-
-                for (int x = startX; x <= endX; ++x)
-                {
-                    image.setPixelColor(x, y, interpolatedCoreShadowLoColor); // Tmp
-                }
-            }
-        }
-    }
-    return image;
+QImage createBackLayerShadows(const std::vector<Quad> &quads, int width, int height)
+{
+    return rasterizeBackPlanes(quads, width, height, [](const Quad &quad) {
+        const int intensity = calculateCoreShadowLoOpacityFromAngle(quad.front1, quad.front2);
+        // Lighting stays in RGB; alpha is exclusively geometric coverage.
+        return QColor(intensity, intensity, intensity);
+    });
 }
 } // namespace
 
