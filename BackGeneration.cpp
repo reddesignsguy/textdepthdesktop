@@ -13,6 +13,7 @@
 namespace {
 struct Quad {
     QPointF front1, front2, back1, back2;
+    int shadowIntensity = -1; // Lighting uses the original contour, before seam adjustment.
     std::vector<QPointF> getPoints() const { return {front1, front2, back2, back1}; }
     std::vector<std::pair<QPointF, QPointF>> getEdges() const {
         return {{front1, front2}, {front2, back2}, {back2, back1}, {back1, front1}};
@@ -228,6 +229,65 @@ QPointF calculateVanishingPoint(const std::vector<std::vector<QPointF>> &frontSu
     return QPointF(0, 0);
 }
 
+// Inset the front attachment into the filled glyph. For an outward-facing
+// extrusion this overshoots the plane beneath the front; for an inward-facing
+// extrusion it undershoots it, keeping the back out of the front's AA fringe.
+// Local extrusion directions work for translation and nonuniform scale too,
+// where a single finite vanishing point need not exist.
+std::vector<QPointF> frontAttachments(const std::vector<QPointF> &points,
+                                     const std::vector<QPointF> &backPoints,
+                                     const QPainterPath &filledFront)
+{
+    auto adjusted = points;
+    if (points.size() < 4 || points.front() != points.back()) return adjusted;
+    const size_t count = points.size() - 1;
+    std::vector<QPointF> inward(count);
+    constexpr qreal probe = 0.0001;
+    constexpr qreal overlap = 0.75; // Document pixels, matching the raster AA fringe.
+    const auto dot = [](QPointF a, QPointF b) { return a.x() * b.x() + a.y() * b.y(); };
+    for (size_t i = 0; i < count; ++i) {
+        const QPointF edge = points[i + 1] - points[i];
+        const qreal length = std::hypot(edge.x(), edge.y());
+        if (length <= probe) continue;
+        const QPointF normal(-edge.y() / length, edge.x() / length);
+        const QPointF middle = (points[i] + points[i + 1]) / 2;
+        const bool plus = filledFront.contains(middle + normal * probe);
+        const bool minus = filledFront.contains(middle - normal * probe);
+        // Query the whole filled path: winding reversal and letter counters
+        // must not reverse the meaning of "inside".
+        if (plus != minus) inward[i] = plus ? normal : -normal;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        const QPointF a = inward[(i + count - 1) % count];
+        const QPointF b = inward[i];
+        if (a.isNull() || b.isNull()) continue;
+        const qreal denominator = 1 + dot(a, b);
+        if (denominator < 1e-6) continue;
+        QPointF offset = (a + b) * (overlap / denominator);
+        const qreal length = std::hypot(offset.x(), offset.y());
+        // Bound miters at sharp corners instead of creating long spikes.
+        if (length > 2 * overlap) offset *= 2 * overlap / length;
+        const QPointF depth = backPoints[i] - points[i];
+        const qreal depthLength = std::hypot(depth.x(), depth.y());
+        if (depthLength < probe) continue;
+        // An undershoot must not pass the back and invert a shallow plane.
+        if (dot(offset, depth) > 0 && std::hypot(offset.x(), offset.y()) > depthLength / 2)
+            offset *= (depthLength / 2) / std::hypot(offset.x(), offset.y());
+        // Do not cross a narrow stroke or a nearby counter. Check the whole
+        // short inset, not just its endpoint (which could land in another stroke).
+        qreal fraction = 1;
+        for (int step = 1; step <= 16; ++step) {
+            if (!filledFront.contains(points[i] + offset * (step / 16.0))) {
+                fraction = (step - 1) / 16.0;
+                break;
+            }
+        }
+        adjusted[i] += offset * fraction;
+    }
+    adjusted.back() = adjusted.front();
+    return adjusted;
+}
+
 std::vector<Quad> createFrontAndBackConnection(QPainterPath front, QPainterPath back)
 {
     int num_subdivisions = 25;
@@ -237,7 +297,18 @@ std::vector<Quad> createFrontAndBackConnection(QPainterPath front, QPainterPath 
     // Calculate the vanishing point using the leftmost and rightmost subpaths
     QPointF vanishingPoint = calculateVanishingPoint(tmp_frontSubpaths, tmp_backSubpaths);
 
+    // Use the sampled contour for side tests, so a curved chord's midpoint
+    // cannot lie on the wrong side of the original Bezier curve.
+    QPainterPath filledFront;
+    filledFront.setFillRule(front.fillRule());
+    for (const auto &points : tmp_frontSubpaths) {
+        if (points.empty()) continue;
+        filledFront.moveTo(points.front());
+        for (size_t i = 1; i < points.size(); ++i) filledFront.lineTo(points[i]);
+        filledFront.closeSubpath();
+    }
     std::vector<Quad> quads;
+    std::vector<int> originalDistances;
     // Abstract the points into quads which is needed for when we sort them
     for (int subpathIdx = 0; subpathIdx < tmp_frontSubpaths.size(); subpathIdx++)
     {
@@ -245,15 +316,20 @@ std::vector<Quad> createFrontAndBackConnection(QPainterPath front, QPainterPath 
         std::vector<QPointF> &frontPoints = tmp_frontSubpaths[subpathIdx];
         std::vector<QPointF> &backPoints = tmp_backSubpaths[subpathIdx];
 
+        const auto attachments = frontAttachments(frontPoints, backPoints, filledFront);
         std::vector<Quad> quadsForThisLetter;
         for (int i = 0; i < frontPoints.size() - 1; i++)
         {
             Quad q;
-            q.front1 = frontPoints[i];
-            q.front2 = frontPoints[i + 1];
+            q.front1 = attachments[i];
+            q.front2 = attachments[i + 1];
+            q.shadowIntensity = calculateCoreShadowLoOpacityFromAngle(frontPoints[i], frontPoints[i + 1]);
             q.back1 = backPoints[i];
             q.back2 = backPoints[i + 1];
             quadsForThisLetter.push_back(q);
+            // Attachment overlap must not change the existing visibility order.
+            const QPointF center = (frontPoints[i] + frontPoints[i + 1] + q.back1 + q.back2) / 4;
+            originalDistances.push_back(QLineF(center, vanishingPoint).length());
         }
 
         qDebug() << "apatriawan num quads: " << quadsForThisLetter.size() << " for subpathIdx: " << subpathIdx;
@@ -264,20 +340,9 @@ std::vector<Quad> createFrontAndBackConnection(QPainterPath front, QPainterPath 
     std::vector<std::pair<int, int>> subpathQuadsDistToVanishingPointIndices;
     int i = 0;
 
-    // Calculate dist to vanishing points for each quad
-    for (const auto &quad : quads)
-    {
-        QPointF avg(0, 0);
-        avg += quad.front1;
-        avg += quad.front2;
-        avg += quad.back1;
-        avg += quad.back2;
-        avg /= 4;
-
-        subpathQuadsDistToVanishingPointIndices.push_back(std::pair<int, int>{i,
-                                                                              QLineF(avg, vanishingPoint).length()});
-        i++;
-    }
+    // Sort by the original geometry, before extending/retracting attachments.
+    for (int distance : originalDistances)
+        subpathQuadsDistToVanishingPointIndices.emplace_back(i++, distance);
 
     // Sort the indices
     std::sort(subpathQuadsDistToVanishingPointIndices.begin(), subpathQuadsDistToVanishingPointIndices.end(),
@@ -381,7 +446,8 @@ QImage createBackLayerBase(const std::vector<Quad> &quads, int width, int height
 QImage createBackLayerShadows(const std::vector<Quad> &quads, int width, int height)
 {
     return rasterizeBackPlanes(quads, width, height, [](const Quad &quad) {
-        const int intensity = calculateCoreShadowLoOpacityFromAngle(quad.front1, quad.front2);
+        const int intensity = quad.shadowIntensity >= 0 ? quad.shadowIntensity
+            : calculateCoreShadowLoOpacityFromAngle(quad.front1, quad.front2);
         // Lighting stays in RGB; alpha is exclusively geometric coverage.
         return QColor(intensity, intensity, intensity);
     });

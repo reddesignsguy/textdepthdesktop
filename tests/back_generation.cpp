@@ -65,6 +65,54 @@ int main()
                 if (alpha > 0 && alpha < 255) ++partial;
             }
         require(partial > 20, "Curved silhouette has no antialiasing");
+        // The exposed (right) side must overlap the front's fractional edge;
+        // the hidden (left) side must retreat out of that edge's alpha fringe.
+        QPainterPath rectangle;
+        rectangle.addRect(QRectF(10.25, 10.25, 20, 20));
+        for (const auto &outline : {rectangle, rectangle.toReversed()}) {
+            Front joinedFront;
+            joinedFront.vectorMaskData = outline;
+            const auto joined = generateBack(joinedFront, QSize(70, 60), {15, 0}, {1, 1});
+            require(qAlpha(joined.baseLayer.pixel(30, 20)) == 255,
+                    "Visible plane does not overlap front fringe");
+            require(qAlpha(joined.baseLayer.pixel(10, 20)) == 0,
+                    "Hidden plane bleeds through front fringe");
+            const auto leftward = generateBack(joinedFront, QSize(70, 60), {-8, 0}, {1, 1});
+            require(qAlpha(leftward.baseLayer.pixel(10, 20)) == 255,
+                    "Reversed extrusion does not overlap front fringe");
+            require(qAlpha(leftward.baseLayer.pixel(30, 20)) == 0,
+                    "Reversed hidden plane bleeds through front fringe");
+        }
+
+        // Letter counters have the opposite filled side from outer contours,
+        // regardless of contour winding with odd-even fill.
+        QPainterPath ring;
+        ring.addRect(QRectF(5, 5, 50, 50));
+        ring.addRect(QRectF(15, 15, 30, 30));
+        for (const auto &outline : {ring, ring.toReversed()}) {
+            const auto contours = getNonBezierPath(outline, 25);
+            for (const auto &contour : contours) {
+                auto backContour = contour;
+                for (auto &point : backContour) point += QPointF(10, 8);
+                const auto attachment = frontAttachments(contour, backContour, outline);
+                require(attachment.front() == attachment.back(), "Contour closure split");
+                for (size_t i = 0; i + 1 < contour.size(); ++i)
+                    require(outline.contains(attachment[i]), "Attachment escaped filled text or entered counter");
+            }
+        }
+        // Very shallow and zero-depth extrusions must not flip past the back.
+        const auto contour = getNonBezierPath(rectangle, 25).front();
+        require(frontAttachments(contour, contour, rectangle) == contour,
+                "Zero-depth geometry acquired an extrusion");
+        auto shallow = contour;
+        for (auto &point : shallow) point += QPointF(.1, 0);
+        const auto attachment = frontAttachments(contour, shallow, rectangle);
+        for (size_t i = 0; i < contour.size(); ++i) {
+            const auto offset = attachment[i] - contour[i];
+            if (offset.x() > 0)
+                require(std::hypot(offset.x(), offset.y()) <= .050001,
+                        "Undershoot inverted a shallow plane");
+        }
         std::cout << "Back generation coverage tests passed\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
