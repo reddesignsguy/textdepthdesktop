@@ -29,7 +29,7 @@ qt_add_qml_module(appTextDepthOG
         GlobalOptionsPanel.qml
         UnitPropertiesPanel.qml
         BackColorsPanel.qml RgbColorControl.qml
-        CanvasToolBar.qml NavigationTool.qml BackMoveTool.qml BackResizeTool.qml
+        CanvasToolBar.qml ToolOptionsBar.qml NavigationTool.qml BackMoveTool.qml BackResizeTool.qml
         RESOURCES icons/navigate.svg icons/back-move.svg icons/back-resize.svg
         SOURCES BackPreview.h
         SOURCES UnitPropertiesModel.h UnitPropertiesModel.cpp

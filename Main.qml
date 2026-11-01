@@ -82,6 +82,11 @@ Window {
                     id: canvasTools
                     Layout.fillWidth: true
                 }
+                ToolOptionsBar {
+                    id: toolOptions
+                    Layout.fillWidth: true
+                    activeTool: canvasTools.activeTool
+                }
                 TextField {
                     id: textInput
                     Layout.fillWidth: true
@@ -147,6 +152,7 @@ Window {
                     anchors.fill: parent
                     scene: canvasScene
                     propertiesModel: unitPropertiesModel
+                    verticalOnly: toolOptions.moveVerticalOnly
                     enabled: canvasTools.activeTool === "backMove"
                     visible: enabled
                 }

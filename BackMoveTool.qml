@@ -6,9 +6,15 @@ MouseArea {
     required property var propertiesModel
     property point origin
     property bool dragging: false
+    property bool verticalOnly: false
     acceptedButtons: Qt.LeftButton
-    cursorShape: propertiesModel.canMoveBack ? Qt.SizeAllCursor : Qt.ForbiddenCursor
+    cursorShape: propertiesModel.canMoveBack
+        ? (verticalOnly ? Qt.SizeVerCursor : Qt.SizeAllCursor) : Qt.ForbiddenCursor
     focus: true
+    function translationAt(x, y) {
+        const point = mapToItem(scene, x, y)
+        return Qt.point(verticalOnly ? 0 : point.x - origin.x, point.y - origin.y)
+    }
     function cancel() {
         if (dragging) propertiesModel.cancelTranslation()
         dragging = false
@@ -20,13 +26,11 @@ MouseArea {
     }
     onPositionChanged: function(mouse) {
         if (!dragging) return
-        const point = mapToItem(scene, mouse.x, mouse.y)
-        propertiesModel.translateBack(Qt.point(point.x - origin.x, point.y - origin.y))
+        propertiesModel.translateBack(translationAt(mouse.x, mouse.y))
     }
     onReleased: function(mouse) {
         if (!dragging) return
-        const point = mapToItem(scene, mouse.x, mouse.y)
-        propertiesModel.translateBack(Qt.point(point.x - origin.x, point.y - origin.y))
+        propertiesModel.translateBack(translationAt(mouse.x, mouse.y))
         propertiesModel.finishTranslation()
         dragging = false
     }

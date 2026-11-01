@@ -9,25 +9,32 @@ TestCase {
     visible: running
     when: windowShown
     CanvasToolBar { id: toolbar; width: parent.width }
+    ToolOptionsBar {
+        id: options
+        y: toolbar.height
+        width: parent.width
+        activeTool: toolbar.activeTool
+    }
     Item { id: testScene; x: 0; y: 0; scale: 2; transformOrigin: Item.TopLeft }
     NavigationTool {
         id: navigation
-        y: 60; width: 400; height: 300
+        y: 100; width: 400; height: 300
         scene: testScene
         enabled: toolbar.activeTool === "navigate"
         visible: enabled
     }
     BackMoveTool {
         id: moveTool
-        y: 60; width: 400; height: 300
+        y: 100; width: 400; height: 300
         scene: testScene
         propertiesModel: testProperties
+        verticalOnly: options.moveVerticalOnly
         enabled: toolbar.activeTool === "backMove"
         visible: enabled
     }
     BackResizeTool {
         id: resizeTool
-        y: 60; width: 400; height: 300
+        y: 100; width: 400; height: 300
         scene: testScene
         propertiesModel: testProperties
         enabled: toolbar.activeTool === "backResize"
@@ -41,6 +48,7 @@ TestCase {
     SignalSpy { id: resizeCanceled; target: testProperties; signalName: "resizeCanceled" }
     function init() {
         toolbar.activeTool = "navigate"
+        options.moveVerticalOnly = false
         testScene.x = 0; testScene.y = 0; testScene.scale = 2
         testSetup.resetUnits(2)
         translations.clear(); finished.clear(); canceled.clear()
@@ -79,6 +87,36 @@ TestCase {
         toolbar.activeTool = "navigate"
         compare(canceled.count, 2)
         mouseRelease(navigation, 100, 100)
+    }
+    function test_verticalOnlyMovement() {
+        verify(!options.visible)
+        testLayerModel.selectLayer(0)
+        testProperties.requestToggleBack()
+        toolbar.activeTool = "backMove"
+        verify(options.visible)
+        const toggle = findChild(options, "moveVerticalOnlyCheckBox")
+        mouseClick(toggle)
+        verify(moveTool.verticalOnly)
+        compare(moveTool.cursorShape, Qt.SizeVerCursor)
+        waitForRendering(moveTool)
+        mousePress(moveTool, 100, 100)
+        mouseMove(moveTool, 140, 80)
+        verify(translations.count > 0)
+        for (let i = 0; i < translations.count; ++i)
+            compare(translations.signalArguments[i][1].x, 0)
+        mouseRelease(moveTool, 160, 60)
+        compare(finished.count, 1)
+        const point = translations.signalArguments[translations.count - 1][1]
+        compare(point.x, 0); compare(point.y, -20)
+
+        toolbar.activeTool = "backResize"
+        verify(!options.visible)
+        toolbar.activeTool = "backMove"
+        verify(toggle.checked)
+        mouseClick(toggle)
+        mouseDrag(moveTool, 100, 100, 40, 20, Qt.LeftButton)
+        const freePoint = translations.signalArguments[translations.count - 1][1]
+        compare(freePoint.x, 20); compare(freePoint.y, 10)
     }
     function test_resizeUsesDocumentCoordinatesAndCancels() {
         testLayerModel.selectLayer(0)
